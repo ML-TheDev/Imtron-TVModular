@@ -110,7 +110,14 @@ Es gibt zwei Render-Wege, die Anwendung wählt selbst:
 | **WebCodecs, im Browser** | online, z. B. auf Vercel | rendert im Browser mit dem Hardware-Encoder, ganz ohne Server; gemessen rund 2 s für 8 s Material in 4K, Ergebnis geht in den Download-Ordner |
 
 Mit `?render=browser` bzw. `?render=server` an der Adresse lässt sich der Weg erzwingen.
-Das Rendern im Browser braucht Chrome oder Edge und nutzt
+
+**Browser:** Das Rendern im Browser braucht **Chrome oder Edge**. Firefox besitzt die
+WebCodecs-Schnittstellen, aber keinen H.264-Encoder; die Anwendung prüft das beim Laden
+mit einer echten Encoder-Abfrage und sperrt den Export dort mit einer klaren Meldung,
+statt beim Rendern stehen zu bleiben. Kann ein Rechner nur HD codieren, verschwindet die
+4K-Auswahl. Auswahl, Vorschau und Layout speichern/laden funktionieren in jedem Browser.
+
+Zum Rendern nutzt die Anwendung
 [app/vendor/mp4box.all.min.js](app/vendor/mp4box.all.min.js) zum Demuxen sowie
 [app/vendor/mp4-muxer.min.js](app/vendor/mp4-muxer.min.js) zum Schreiben der MP4 (beide
 MIT-Lizenz, mitgeliefert). Größe, Laufweite, Position und Bewegung der Inserts liegen

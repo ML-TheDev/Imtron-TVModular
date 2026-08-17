@@ -1163,6 +1163,11 @@
       return;
     }
 
+    if (!server && size.width > maxRenderWidth) {
+      size.width = 1920;
+      size.height = 1080;
+    }
+
     exportBtn.disabled = true;
     note('');
     showModal(server ? 'FFMPEG · LOKAL' : 'WEBCODECS · IM BROWSER');
@@ -1378,15 +1383,36 @@
   /* Ist ffmpeg über den lokalen Server erreichbar, wird dort gerendert
      (schneller, kann verlustfrei kopieren) – sonst im Browser. */
   let serverRender = false;
+  let maxRenderWidth = 3840;
 
-  function announceEngine() {
+  async function announceEngine() {
     if (serverRender) {
       note('RENDERT LOKAL MIT FFMPEG');
-    } else if (window.PeaqRender && PeaqRender.supported()) {
-      note('RENDERT IM BROWSER (WEBCODECS)');
-    } else {
+      return;
+    }
+
+    const check = window.PeaqRender
+      ? await PeaqRender.probe()
+      : { ok: false, reason: 'render.js nicht geladen' };
+
+    if (!check.ok) {
       exportBtn.disabled = true;
-      note('RENDERN BRAUCHT CHROME ODER EDGE', true);
+      resSelect.disabled = true;
+      note('EXPORT HIER NICHT MÖGLICH – ' + check.reason.toUpperCase() +
+           '. BITTE CHROME ODER EDGE VERWENDEN.', true);
+      return;
+    }
+
+    maxRenderWidth = check.maxWidth;
+
+    /* Kann der Rechner nur HD, die 4K-Wahl entfernen */
+    if (maxRenderWidth < 3840) {
+      const uhd = resSelect.querySelector('option[value="3840x2160"]');
+      if (uhd) uhd.remove();
+      resSelect.value = '1920x1080';
+      note('RENDERT IM BROWSER (WEBCODECS · MAXIMAL HD)');
+    } else {
+      note('RENDERT IM BROWSER (WEBCODECS)');
     }
   }
 

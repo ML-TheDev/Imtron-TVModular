@@ -126,7 +126,16 @@ window.PeaqRender = (function () {
     typeof window.DataStream === 'function' &&
     typeof window.Mp4Muxer === 'object';
 
-  const CODECS = ['avc1.640033', 'avc1.4d0033', 'avc1.640032', 'avc1.640028', 'avc1.4d0028'];
+  const CODECS = [
+    'avc1.640033', 'avc1.4d0033', 'avc1.640032',
+    'avc1.640028', 'avc1.4d0028', 'avc1.42e028'
+  ];
+
+  /* Manche Browser antworten auf isConfigSupported gar nicht – deshalb mit Frist */
+  const withLimit = (promise, ms) => Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Encoder-Abfrage ohne Antwort')), ms))
+  ]);
 
   async function pickCodec(width, height, bitrate) {
     for (const codec of CODECS) {
@@ -137,11 +146,36 @@ window.PeaqRender = (function () {
         latencyMode: 'quality'
       };
       try {
-        const res = await VideoEncoder.isConfigSupported(cfg);
+        const res = await withLimit(VideoEncoder.isConfigSupported(cfg), 1500);
         if (res && res.supported) return cfg;
-      } catch (e) { /* nächsten probieren */ }
+      } catch (e) {
+        /* Antwortet der Browser gar nicht, antwortet er auch für die
+           übrigen Codecs nicht – dann gleich aufgeben. */
+        if (/ohne Antwort/.test(String(e && e.message))) return null;
+      }
     }
     return null;
+  }
+
+  /* Vorab klären, ob dieser Browser wirklich H.264 codieren kann.
+     Firefox hat die WebCodecs-Schnittstellen, aber keinen H.264-Encoder –
+     ohne diese Prüfung würde ein Export dort einfach stehen bleiben. */
+  async function probe() {
+    if (!supported()) {
+      return { ok: false, reason: 'WebCodecs fehlt in diesem Browser' };
+    }
+
+    try {
+      const uhd = await pickCodec(3840, 2160, Math.round(3840 * 2160 * CONST.FPS * 0.15));
+      if (uhd) return { ok: true, codec: uhd.codec, maxWidth: 3840 };
+
+      const hd = await pickCodec(1920, 1080, Math.round(1920 * 1080 * CONST.FPS * 0.15));
+      if (hd) return { ok: true, codec: hd.codec, maxWidth: 1920 };
+
+      return { ok: false, reason: 'kein H.264-Encoder in diesem Browser' };
+    } catch (e) {
+      return { ok: false, reason: String(e && e.message || e) };
+    }
   }
 
   /* ---------- Demuxen mit mp4box ---------- */
@@ -393,6 +427,6 @@ window.PeaqRender = (function () {
     }
   }
 
-  return { CONST, textLines, insertMotion, drawInsert, insertPngDataUrl, supported, render };
+  return { CONST, textLines, insertMotion, drawInsert, insertPngDataUrl, supported, probe, render };
 
 })();
