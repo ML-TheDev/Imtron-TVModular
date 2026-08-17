@@ -123,10 +123,12 @@ Qualitätsverlust, ein bis zwei Sekunden.
 Sonst wird auf die größte vorkommende Auflösung skaliert und neu codiert
 (libx264 CRF 18, sonst NVENC); für 24 Sekunden 4K sind das rund 20 Sekunden.
 
-**Achtung:** `5 - Modul - Sound Feature.mp4` liegt in 1920×1080 vor, alle anderen Clips in
-3840×2160. Solange dieses Modul aktiv ist, läuft daher immer der Neu-Codierungsweg und der
-HD-Clip wird auf 4K hochskaliert. Eine 4K-Fassung dieses Clips würde den verlustfreien
-Export wiederherstellen.
+**Bildrate:** Das gesamte Material liegt in 25 fps vor, und beide Render-Wege geben
+25 fps aus – es wird also nichts umgerechnet. Der Wert steht in
+[app/js/render.js](app/js/render.js) unter `CONST.FPS` sowie in [server.js](server.js)
+im `fps=25` der Filterkette. Käme später Material mit einer anderen Bildrate hinzu,
+müsste das angepasst werden (der Browser-Renderer setzt die Zeitstempel in festen
+40-ms-Schritten und würde einen 30-fps-Clip sonst länger machen).
 
 ffmpeg wird automatisch gesucht: PATH, Topaz-Installation, übliche Installationsordner.
 Ein eigener Pfad lässt sich per Umgebungsvariable setzen:
