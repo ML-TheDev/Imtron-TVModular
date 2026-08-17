@@ -158,11 +158,35 @@ window.PeaqRender = (function () {
     return null;
   }
 
-  async function demux(url) {
+  /* Herunterladen mit Fortschritt – bei 4K-Clips dauert das auf langsamen
+     Leitungen am längsten, deshalb sichtbar machen. */
+  async function fetchProgress(url, onBytes) {
     const res = await fetch(url);
-    if (!res.ok) throw new Error('Video nicht ladbar: ' + url);
+    if (!res.ok) throw new Error('Video nicht ladbar (HTTP ' + res.status + ')');
 
-    const buffer = await res.arrayBuffer();
+    const total = Number(res.headers.get('content-length')) || 0;
+    if (!res.body || !total) return res.arrayBuffer();
+
+    const reader = res.body.getReader();
+    const chunks = [];
+    let got = 0;
+
+    for (;;) {
+      const step = await reader.read();
+      if (step.done) break;
+      chunks.push(step.value);
+      got += step.value.length;
+      if (onBytes) onBytes(got, total);
+    }
+
+    const all = new Uint8Array(got);
+    let off = 0;
+    chunks.forEach(c => { all.set(c, off); off += c.length; });
+    return all.buffer;
+  }
+
+  async function demux(url, onBytes) {
+    const buffer = await fetchProgress(url, onBytes);
     buffer.fileStart = 0;
 
     const file    = MP4Box.createFile();
@@ -215,21 +239,40 @@ window.PeaqRender = (function () {
 
     if (!items.length) throw new Error('Kein aktives Modul');
 
-    const bitrate = Math.round(W * H * CONST.FPS * 0.15);
-    const config  = await pickCodec(W, H, bitrate);
-    if (!config) throw new Error('Kein H.264-Encoder für ' + W + '×' + H + ' verfügbar');
+    /* Kann der Rechner die Wunschauflösung nicht codieren, auf HD ausweichen */
+    let outW = W, outH = H;
+    let config = await pickCodec(outW, outH, Math.round(outW * outH * CONST.FPS * 0.15));
+
+    if (!config && (W > 1920 || H > 1080)) {
+      outW = 1920; outH = 1080;
+      config = await pickCodec(outW, outH, Math.round(outW * outH * CONST.FPS * 0.15));
+      if (config) report({ phase: 'fallback', width: outW, height: outH, percent: 0 });
+    }
+    if (!config) throw new Error('Dieser Rechner hat keinen H.264-Encoder für ' + W + '×' + H);
+
+    console.info('[PEAQ] Render', outW + '×' + outH, config.codec, items.length + ' Module');
 
     const totalFrames = items.reduce((sum, it) => sum + Math.round((it.duration || 4) * CONST.FPS), 0);
     let doneFrames = 0;
 
-    const canvas = new OffscreenCanvas(W, H);
+    /* Wachhund: wenn nichts mehr passiert, mit klarer Meldung abbrechen */
+    let lastMove = Date.now();
+    const touch   = () => { lastMove = Date.now(); };
+    const stalled = () => Date.now() - lastMove > 45000;
+    const guard = () => {
+      if (encodeError) throw encodeError;
+      if (stopped())   throw new Error('abgebrochen');
+      if (stalled())   throw new Error('Rendern hängt – bitte HD statt 4K wählen oder Chrome neu starten');
+    };
+
+    const canvas = new OffscreenCanvas(outW, outH);
     const ctx    = canvas.getContext('2d', { alpha: false });
 
     const { Muxer, ArrayBufferTarget } = Mp4Muxer;
     const target = new ArrayBufferTarget();
     const muxer  = new Muxer({
       target,
-      video: { codec: 'avc', width: W, height: H, frameRate: CONST.FPS },
+      video: { codec: 'avc', width: outW, height: outH, frameRate: CONST.FPS },
       fastStart: 'in-memory'
     });
 
@@ -247,12 +290,23 @@ window.PeaqRender = (function () {
       for (let m = 0; m < items.length; m++) {
         if (stopped()) throw new Error('abgebrochen');
 
-        const item = items[m];
+        const item        = items[m];
+        const moduleStart = Date.now();
+        const share       = Math.round((item.duration || 4) * CONST.FPS);
+
         report({ phase: 'load', module: m + 1, modules: items.length,
                  percent: doneFrames / totalFrames * 100 });
 
-        const media = await demux(item.src);
-        const dur   = item.duration || (media.samples.length / CONST.FPS);
+        const media = await demux(item.src, (got, all) => {
+          touch();
+          report({
+            phase: 'load', module: m + 1, modules: items.length,
+            loaded: Math.round(got / all * 100),
+            percent: (doneFrames + share * 0.25 * (got / all)) / totalFrames * 100
+          });
+        });
+
+        const dur = item.duration || (media.samples.length / CONST.FPS);
 
         const pending = [];
         const decoder = new VideoDecoder({
@@ -273,10 +327,10 @@ window.PeaqRender = (function () {
             const frame = pending.shift();
             const tLocal = frame.timestamp / 1e6;
 
-            ctx.drawImage(frame, 0, 0, W, H);
+            ctx.drawImage(frame, 0, 0, outW, outH);
             frame.close();
 
-            drawInsert(ctx, { text: item.text, align: item.align, width: W, height: H,
+            drawInsert(ctx, { text: item.text, align: item.align, width: outW, height: outH,
                               time: tLocal, duration: dur });
 
             const out = new VideoFrame(canvas, { timestamp: globalUs, duration: frameDur });
@@ -286,9 +340,9 @@ window.PeaqRender = (function () {
             firstOfModule = false;
             globalUs += frameDur;
             doneFrames++;
+            touch();
 
-            while (encoder.encodeQueueSize > 8) await tick();
-            if (encodeError) throw encodeError;
+            while (encoder.encodeQueueSize > 8) { await tick(); guard(); }
           }
 
           report({ phase: 'encode', module: m + 1, modules: items.length,
@@ -299,7 +353,7 @@ window.PeaqRender = (function () {
         /* Durchgehend decodieren – ein flush() zwischendurch würde einen
            neuen Keyframe verlangen. */
         for (const s of media.samples) {
-          if (stopped()) { decoder.close(); throw new Error('abgebrochen'); }
+          guard();
 
           decoder.decode(new EncodedVideoChunk({
             type: s.is_sync ? 'key' : 'delta',
@@ -309,12 +363,15 @@ window.PeaqRender = (function () {
           }));
 
           if (pending.length >= 6) await drainFrames();
-          while (decoder.decodeQueueSize > 16) { await tick(); await drainFrames(); }
+          while (decoder.decodeQueueSize > 16) { await tick(); await drainFrames(); guard(); }
         }
 
         await decoder.flush();
         await drainFrames();
         decoder.close();
+
+        console.info('[PEAQ] Modul ' + (m + 1) + '/' + items.length + ' fertig in ' +
+                     (Date.now() - moduleStart) + ' ms');
       }
 
       report({ phase: 'finish', percent: 99 });
@@ -325,7 +382,10 @@ window.PeaqRender = (function () {
       if (encodeError) throw encodeError;
 
       report({ phase: 'done', percent: 100 });
-      return new Blob([target.buffer], { type: 'video/mp4' });
+      return {
+        blob: new Blob([target.buffer], { type: 'video/mp4' }),
+        width: outW, height: outH, codec: config.codec
+      };
 
     } catch (err) {
       try { encoder.close(); } catch (e) { /* egal */ }

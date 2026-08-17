@@ -1007,9 +1007,11 @@
   const resSelect   = document.getElementById('resSelect');
 
   let cancelRender = false;
+  let renderStart  = 0;
 
   function showModal(engine) {
     cancelRender = false;
+    renderStart  = Date.now();
     modal.hidden = false;
     modalEngine.textContent = engine;
     setProgress(0, 'VORBEREITUNG …');
@@ -1020,7 +1022,16 @@
   function setProgress(percent, step) {
     const p = Math.max(0, Math.min(100, percent || 0));
     modalBar.style.width = p.toFixed(1) + '%';
-    modalPct.textContent = Math.round(p) + ' %';
+
+    /* Restzeit schätzen – so ist ein langsamer Lauf von einem Stillstand zu unterscheiden */
+    let rest = '';
+    const passed = (Date.now() - renderStart) / 1000;
+    if (p > 3 && p < 99.5 && passed > 2) {
+      const sec = Math.round(passed / p * (100 - p));
+      rest = ' · NOCH CA. ' + (sec >= 90 ? Math.round(sec / 60) + ' MIN' : Math.max(1, sec) + ' S');
+    }
+
+    modalPct.textContent = Math.round(p) + ' %' + rest;
     if (step) modalStep.textContent = step;
   }
 
@@ -1104,31 +1115,39 @@
       duration: seg.duration
     }));
 
-    const blob = await PeaqRender.render({
+    let hinweis = '';
+
+    const out = await PeaqRender.render({
       items,
       width: size.width,
       height: size.height,
       cancelled: () => cancelRender,
       onProgress: p => {
-        const step = p.phase === 'load'   ? 'MODUL ' + p.module + ' VON ' + p.modules + ' WIRD GELADEN …'
-                   : p.phase === 'encode' ? 'MODUL ' + p.module + ' VON ' + p.modules + ' WIRD CODIERT …'
-                   : p.phase === 'finish' ? 'DATEI WIRD GESCHRIEBEN …'
-                   : 'FERTIG';
+        if (p.phase === 'fallback') {
+          hinweis = ' · 4K NICHT MÖGLICH, HD GERENDERT';
+          return;
+        }
+        const step = p.phase === 'load'
+              ? 'MODUL ' + p.module + ' VON ' + p.modules + ' WIRD GELADEN' +
+                (p.loaded != null ? ' … ' + p.loaded + ' %' : ' …')
+              : p.phase === 'encode' ? 'MODUL ' + p.module + ' VON ' + p.modules + ' WIRD CODIERT …'
+              : p.phase === 'finish' ? 'DATEI WIRD GESCHRIEBEN …'
+              : 'FERTIG';
         setProgress(p.percent, step);
       }
     });
 
     const name = 'PEAQ_Gesamtvideo_' +
       new Date().toISOString().slice(0, 16).replace(/[:T-]/g, '') + '.mp4';
-    const url = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(out.blob);
     startDownload(url, name);
     setTimeout(() => URL.revokeObjectURL(url), 30000);
 
     return {
-      name, size: blob.size, mode: 'webcodecs',
+      name, size: out.blob.size, mode: 'webcodecs',
       inserts: items.filter(i => i.text).length,
-      resolution: size.width + 'x' + size.height,
-      place: 'IM DOWNLOAD-ORDNER'
+      resolution: out.width + 'x' + out.height,
+      place: 'IM DOWNLOAD-ORDNER' + hinweis
     };
   }
 
