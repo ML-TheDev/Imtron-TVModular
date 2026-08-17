@@ -1,0 +1,10 @@
+# Exportierte Videos und Zwischenstände
+Export/
+
+# Node
+node_modules/
+
+# System
+Thumbs.db
+desktop.ini
+.DS_Store

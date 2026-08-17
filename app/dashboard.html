@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PEAQ – Modulauswahl</title>
+  <link rel="icon" href="assets/peaq-logo.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <header class="topbar">
+    <img class="logo" src="assets/peaq-logo.png" alt="PEAQ">
+    <span class="topbar-label">MODULAUSWAHL</span>
+  </header>
+
+  <main class="board">
+
+    <section class="strip-wrap">
+      <div class="section-head">
+        <span>MODULE</span>
+        <span id="moduleCount"></span>
+      </div>
+      <div id="strip" class="strip"></div>
+
+      <div id="stripScroll" class="strip-scroll" hidden>
+        <div id="stripThumb" class="strip-scroll-thumb"></div>
+      </div>
+    </section>
+
+    <section class="inserts-wrap">
+      <button id="insertsToggle" class="inserts-toggle" type="button" aria-expanded="false">
+        <span class="inserts-plus">+</span>
+        <span class="inserts-label">TEXT INSERTS</span>
+      </button>
+    </section>
+
+    <section class="player-block">
+      <div class="section-head">
+        <span>GESAMTVIDEO</span>
+        <span id="segmentLabel"></span>
+      </div>
+
+      <div id="stage" class="player-stage">
+        <video id="player" playsinline preload="auto"></video>
+        <div class="insert-overlay"><span id="insertText"></span></div>
+        <div class="player-empty">KEIN AKTIVES MODUL</div>
+      </div>
+
+      <div class="transport">
+        <button id="playBtn" class="btn-play" type="button">PLAY</button>
+        <div id="scrub" class="scrub"></div>
+        <div class="timecode">
+          <span id="tcNow">00:00</span> <span class="total">/ <span id="tcTotal">00:00</span></span>
+        </div>
+      </div>
+
+      <div class="export-row">
+        <button id="exportBtn" class="btn-export" type="button">EXPORT MP4 (H.264)</button>
+        <button id="layoutBtn" class="btn-export" type="button">LAYOUT SPEICHERN</button>
+        <button id="layoutLoadBtn" class="btn-export" type="button">LAYOUT LADEN</button>
+        <span id="exportNote" class="export-note"></span>
+      </div>
+    </section>
+
+    <div class="board-foot">
+      <div class="foot-item">
+        <span class="foot-key">ZIEHEN</span>
+        <span class="foot-sub">MODUL VERSCHIEBEN</span>
+      </div>
+      <div class="foot-item">
+        <span class="foot-key">X</span>
+        <span class="foot-sub">MODUL AUSGRAUEN</span>
+      </div>
+      <div class="foot-item">
+        <span class="foot-key">DOPPELKLICK</span>
+        <span class="foot-sub">ANDERES VIDEO</span>
+      </div>
+      <div class="foot-item">
+        <span class="foot-key">LEERTASTE</span>
+        <span class="foot-sub">PLAY / PAUSE</span>
+      </div>
+      <button id="resetBtn" class="foot-item foot-spacer" type="button">
+        <span class="foot-key">ZURÜCKSETZEN</span>
+        <span class="foot-sub">AUSGANGSZUSTAND</span>
+      </button>
+      <button id="logoutBtn" class="foot-item" type="button">
+        <span class="foot-key">ABMELDEN</span>
+        <span class="foot-sub">SITZUNG BEENDEN</span>
+      </button>
+    </div>
+
+  </main>
+
+  <video id="preloader" preload="auto" muted style="display:none"></video>
+  <input id="fileInput" type="file" accept="video/*" hidden>
+  <input id="layoutInput" type="file" accept="application/json,.json" hidden>
+
+  <script src="js/config.js"></script>
+  <script src="js/dashboard.js"></script>
+</body>
+</html>

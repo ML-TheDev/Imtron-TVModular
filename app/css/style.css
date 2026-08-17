@@ -1,0 +1,783 @@
+/* ------------------------------------------------------------------
+   PEAQ – Modularer Video-Konfigurator
+   ------------------------------------------------------------------ */
+
+@font-face {
+  font-family: 'OCRA';
+  src: local('OCR-A BT'), local('OCR A Extended'), local('OCR A Std'),
+       url('../assets/ocr-a.ttf') format('truetype');
+  font-display: swap;
+}
+
+:root {
+  --bg-top:    #b4b0a9;
+  --bg-bottom: #d3d1cd;
+  --module:    #d6d4d0;
+  --ink:       #111111;
+  --ink-soft:  rgba(17, 17, 17, .55);
+  --line:      rgba(17, 17, 17, .18);
+  --radius:    10px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: 'OCRA', 'OCR A Extended', 'Courier New', monospace;
+  color: var(--ink);
+  background: linear-gradient(160deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+  background-attachment: fixed;
+  letter-spacing: .06em;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------------- Kopfzeile ---------------- */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 26px 34px 0;
+}
+
+.logo {
+  height: 45px;
+  width: auto;
+  mix-blend-mode: multiply;
+  user-select: none;
+}
+
+/* Versalhöhe entspricht der Versalhöhe des PEAQ-Logos (Logo 45px hoch) */
+.topbar-label {
+  font-size: 48px;
+  line-height: 1;
+  letter-spacing: .06em;
+  white-space: nowrap;
+}
+
+/* ---------------- Login ---------------- */
+
+.gate {
+  min-height: calc(100vh - 56px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 34px 80px;
+}
+
+.gate-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  width: min(420px, 100%);
+}
+
+.btn-black {
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: .22em;
+  color: #f2f1ee;
+  background: #000;
+  border: none;
+  border-radius: 4px;
+  padding: 15px 30px;
+  cursor: pointer;
+  transition: transform .12s ease, background .2s ease, opacity .2s ease;
+}
+
+.btn-black:hover   { background: #1e1e1e; }
+.btn-black:active  { transform: translateY(1px); }
+.btn-black:disabled{ opacity: .4; cursor: default; }
+
+/* Passworteingabe und OK sitzen zusammen in einem schwarzen Kasten */
+
+.pw-form {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  background: #000;
+  border-radius: 6px;
+  padding: 14px 14px 14px 20px;
+  animation: fade-in .25s ease both;
+}
+
+.pw-form input {
+  flex: 1;
+  min-width: 0;
+  font-family: inherit;
+  font-size: 14px;
+  letter-spacing: .3em;
+  color: #f2f1ee;
+  background: none;
+  border: none;
+  padding: 8px 0;
+  outline: none;
+}
+
+.pw-form input::placeholder { color: rgba(242, 241, 238, .38); letter-spacing: .3em; }
+
+.pw-ok {
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: .22em;
+  color: #000;
+  background: #f2f1ee;
+  border: none;
+  border-radius: 4px;
+  padding: 12px 24px;
+  cursor: pointer;
+  transition: background .2s ease, transform .12s ease;
+}
+
+.pw-ok:hover  { background: #fff; }
+.pw-ok:active { transform: translateY(1px); }
+
+.gate-error {
+  font-size: 11px;
+  letter-spacing: .2em;
+  color: #7a1414;
+  min-height: 14px;
+}
+
+.shake { animation: shake .32s ease; }
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25%      { transform: translateX(-7px); }
+  75%      { transform: translateX(7px); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ---------------- Dashboard ---------------- */
+
+.board {
+  padding: 30px 34px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+}
+
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  font-size: 10px;
+  letter-spacing: .24em;
+  color: var(--ink-soft);
+}
+
+.strip-wrap .section-head { margin-bottom: 24px; }
+
+/* --- Modulleiste --- */
+
+.strip-wrap { position: relative; }
+
+.strip {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  position: relative;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 0;
+  scrollbar-width: none;                 /* eigener Regler unten, siehe .strip-scroll */
+  -ms-overflow-style: none;
+}
+
+.strip::-webkit-scrollbar { display: none; height: 0; }
+
+/* Regler über die volle Breite, der schwarze Griff etwas schmaler */
+.strip-scroll {
+  position: relative;
+  width: 100%;
+  height: 8px;
+  margin-top: 14px;
+  background: rgba(17, 17, 17, .07);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.strip-scroll-thumb {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 0;
+  background: #000;
+  border-radius: 2px;
+}
+
+.strip-scroll-thumb:hover { background: #1c1c1c; }
+
+.module {
+  flex: 0 0 auto;              /* Breite = Cliplänge × Maßstab, per JS gesetzt */
+  background: var(--module);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 8px 8px 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+  cursor: grab;
+  transition: background .25s ease, border-color .25s ease, opacity .25s ease, box-shadow .25s ease;
+}
+
+/* Verschieben per Drag & Drop – die übrigen Module rutschen live zur Seite */
+
+.module.is-dragging {
+  opacity: .35;
+  cursor: grabbing;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .18);
+}
+
+.module.is-current {
+  background: #e9e7e3;
+  border-color: rgba(17, 17, 17, .35);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, .12);
+}
+
+.module.is-off {
+  opacity: .42;
+}
+
+.module-frame {
+  position: relative;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #bfbdb9;
+  aspect-ratio: 16 / 9;
+  cursor: pointer;
+}
+
+.module-frame video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: filter .25s ease;
+}
+
+/* Keine Browser-Overlays (Vollbild / Bild-in-Bild) auf den Vorschauen */
+.module-frame video::-webkit-media-controls,
+.module-frame video::-webkit-media-controls-enclosure,
+.module-frame video::-webkit-media-controls-overlay-play-button,
+.module-frame video::-internal-picture-in-picture-interstitial {
+  display: none !important;
+  -webkit-appearance: none;
+}
+
+.module.is-current .module-frame video { filter: brightness(1.18) contrast(1.02); }
+.module.is-off     .module-frame video { filter: grayscale(1) brightness(.85); }
+
+.module-off-flag {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  letter-spacing: .24em;
+  color: #f2f1ee;
+  background: rgba(0, 0, 0, .45);
+}
+
+.module.is-off .module-off-flag { display: flex; }
+
+.module-x {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 3;
+  width: 22px;
+  height: 22px;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1;
+  color: #f2f1ee;
+  background: rgba(0, 0, 0, .72);
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background .2s ease;
+}
+
+.module-x:hover { background: #000; }
+
+.module-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+  letter-spacing: .1em;
+  overflow: hidden;
+}
+
+.module-name { white-space: nowrap; }
+
+.module-clip {
+  font-size: 11px;
+  letter-spacing: .04em;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+/* Schwarze Variantenleiste, unten an das Modul angehängt */
+
+.module-variants {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px;
+  margin: 4px -8px -7px;
+  background: #000;
+  border-radius: 0 0 9px 9px;
+  overflow: hidden;
+}
+
+.module-variants button {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: inherit;
+  font-size: 14px;
+  letter-spacing: .12em;
+  color: rgba(242, 241, 238, .55);
+  background: #000;
+  border: none;
+  padding: 7px 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color .2s ease, background .2s ease;
+}
+
+.module-variants button:hover      { color: #f2f1ee; background: #1c1c1c; }
+.module-variants button.is-active  { color: #f2f1ee; background: #2b2b2b; }
+
+/* Bei offenen Text-Inserts schließt die Variantenleiste oben an das Textfeld an */
+.strip.show-inserts .module-variants {
+  margin: 4px -8px 0;
+  border-radius: 0;
+}
+
+.module-time {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  z-index: 2;
+  font-size: 10px;
+  letter-spacing: .08em;
+  color: #f2f1ee;
+  background: rgba(0, 0, 0, .6);
+  border-radius: 2px;
+  padding: 2px 5px;
+}
+
+/* Auswahlmenü zum Video-Tausch */
+
+.swap-menu {
+  position: absolute;
+  z-index: 40;
+  min-width: 190px;
+  background: #efedea;
+  border: 1px solid rgba(17, 17, 17, .35);
+  border-radius: 6px;
+  padding: 5px;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, .22);
+}
+
+.swap-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: .14em;
+  color: var(--ink);
+  background: none;
+  border: none;
+  border-radius: 3px;
+  padding: 8px 9px;
+  cursor: pointer;
+}
+
+.swap-menu button:hover      { background: rgba(0, 0, 0, .08); }
+.swap-menu button.is-active  { background: #000; color: #f2f1ee; }
+.swap-menu hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 4px 2px;
+}
+
+/* --- Abspielbalken über der Modulleiste --- */
+
+.playhead {
+  position: absolute;
+  top: 0;
+  bottom: 4px;
+  width: 2px;
+  background: #000;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .2s ease;
+  z-index: 20;
+}
+
+.playhead::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  width: 10px;
+  height: 10px;
+  background: #000;
+  border-radius: 50%;
+}
+
+.playhead.is-on { opacity: 1; }
+
+/* --- Text-Inserts --- */
+
+.inserts-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.inserts-toggle {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  align-self: flex-start;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  opacity: .38;                       /* zunächst kaum wahrnehmbar */
+  transition: opacity .25s ease;
+}
+
+.inserts-toggle:hover,
+.inserts-wrap.is-open .inserts-toggle { opacity: 1; }
+
+.inserts-plus {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #000;
+  color: #f2f1ee;
+  font-size: 15px;
+  line-height: 1;
+  transition: transform .25s ease;
+}
+
+.inserts-wrap.is-open .inserts-plus { transform: rotate(45deg); }
+
+.inserts-label {
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: .24em;
+  color: var(--ink);
+}
+
+/* Textfeld klebt im Modulkästchen und wird beim Verschieben mitgenommen.
+   Es sitzt immer am unteren Rand, über die volle Kästchenbreite. */
+.insert-box {
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  margin: auto -8px -7px;            /* oben auto = an den unteren Rand */
+  background: #000;
+  border-radius: 0 0 9px 9px;
+  padding: 8px 9px 7px;
+}
+
+.strip.show-inserts .insert-box {
+  display: flex;
+  animation: insert-fan .3s cubic-bezier(.2, .7, .3, 1) both;
+}
+
+@keyframes insert-fan {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.insert-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 9px;
+  letter-spacing: .16em;
+  color: rgba(242, 241, 238, .5);
+}
+
+.insert-box input {
+  width: 100%;
+  font-family: inherit;
+  font-size: 13px;
+  letter-spacing: .1em;
+  color: #f2f1ee;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(242, 241, 238, .18);
+  padding: 3px 0;
+  outline: none;
+}
+
+.insert-box input:focus       { border-bottom-color: rgba(242, 241, 238, .7); }
+.insert-box input::placeholder { color: rgba(242, 241, 238, .25); letter-spacing: .1em; }
+
+/* Ausrichtung des Inserts */
+.insert-align {
+  display: flex;
+  gap: 3px;
+  margin-top: 1px;
+}
+
+.insert-align button {
+  flex: 1 1 auto;
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: .06em;
+  color: rgba(242, 241, 238, .4);
+  background: #000;
+  border: none;
+  border-radius: 2px;
+  padding: 3px 0;
+  cursor: pointer;
+  transition: color .2s ease, background .2s ease;
+}
+
+.insert-align button:hover     { color: #f2f1ee; background: #1c1c1c; }
+.insert-align button.is-active { color: #f2f1ee; background: #2b2b2b; }
+
+/* Einblendung über dem Video: von unten herein, nach unten hinaus.
+   left / width / top setzt das Skript passend zum Bildbereich. */
+.insert-overlay {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  top: 80%;
+  transform: translateY(-50%);
+  display: flex;
+  padding: 0 6%;
+  pointer-events: none;
+}
+
+.insert-overlay.align-left   { justify-content: flex-start; }
+.insert-overlay.align-center { justify-content: center; }
+.insert-overlay.align-right  { justify-content: flex-end; }
+
+/* Deckkraft und Position setzt das Skript zeitgenau zum Videobild */
+#insertText {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.14;
+  color: #fff;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, .55);
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+.insert-line { white-space: nowrap; }
+
+.insert-overlay.align-left   #insertText { align-items: flex-start; }
+.insert-overlay.align-center #insertText { align-items: center; }
+.insert-overlay.align-right  #insertText { align-items: flex-end; }
+
+/* --- Player --- */
+
+.player-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Volle Breite; ist das Bild kleiner, bleiben links und rechts schwarze Flächen.
+   Die Text-Inserts richten sich per JS am tatsächlichen Bildbereich aus. */
+.player-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 56vh;
+  background: #000;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.player-stage video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  background: #000;
+}
+
+.player-empty {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  letter-spacing: .24em;
+  color: #7d7a75;
+}
+
+.player-stage.is-empty .player-empty { display: flex; }
+
+.transport {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.btn-play {
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: .18em;
+  color: #f2f1ee;
+  background: #000;
+  border: none;
+  border-radius: 4px;
+  width: 92px;
+  padding: 11px 0;
+  cursor: pointer;
+}
+
+.btn-play:hover { background: #1e1e1e; }
+
+.scrub {
+  flex: 0 1 440px;             /* kürzer als die volle Breite */
+  display: flex;
+  gap: 2px;
+  height: 6px;
+  cursor: pointer;
+}
+
+.scrub-seg {
+  position: relative;
+  height: 100%;
+  background: rgba(17, 17, 17, .07);   /* kaum wahrnehmbares Grau */
+  border: none;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.scrub-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: #000;
+  border-radius: 3px;
+}
+
+.timecode {
+  font-size: 11px;
+  letter-spacing: .12em;
+  white-space: nowrap;
+  min-width: 118px;
+  text-align: right;
+}
+
+.timecode .total { color: var(--ink-soft); }
+
+/* Fußleiste im Stil der Ausstattungsleiste */
+
+.board-foot {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  row-gap: 12px;
+  margin-top: 54px;
+}
+
+.foot-item {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding: 2px 22px;
+  border-left: 1px solid var(--ink);
+}
+
+.foot-item:first-child { border-left: none; padding-left: 0; }
+
+.foot-key {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .16em;
+  color: var(--ink);
+}
+
+.foot-sub {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  color: var(--ink-soft);
+}
+
+.foot-spacer { margin-left: auto; }
+
+button.foot-item {
+  font-family: inherit;
+  text-align: left;
+  background: none;
+  border-top: none;
+  border-right: none;
+  border-bottom: none;
+  cursor: pointer;
+}
+
+button.foot-item:hover .foot-key { text-decoration: underline; }
+
+/* Export */
+
+.export-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.btn-export {
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: .18em;
+  color: #f2f1ee;
+  background: #000;
+  border: none;
+  border-radius: 4px;
+  padding: 11px 20px;
+  cursor: pointer;
+}
+
+.btn-export:hover    { background: #1e1e1e; }
+.btn-export:disabled { opacity: .45; cursor: default; }
+
+.export-note {
+  font-size: 9px;
+  letter-spacing: .16em;
+  color: var(--ink-soft);
+}
+
+.export-note.is-error { color: #7a1414; }
+
+@media (max-width: 900px) {
+  .topbar-label { font-size: 22px; }
+  .transport { flex-wrap: wrap; }
+}

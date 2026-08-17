@@ -1,0 +1,128 @@
+# PEAQ – Modularer Video-Konfigurator
+
+Lokale Web-Anwendung: Passwortabfrage → Dashboard mit Modulleiste, Video-Tausch und
+durchlaufendem Gesamtvideo.
+
+## Starten
+
+Doppelklick auf **Start.cmd** (benötigt Node.js, ist auf diesem Rechner vorhanden).
+Der Browser öffnet automatisch `http://localhost:8123/app/`.
+
+Manuell:
+
+```bash
+node server.js
+```
+
+Passwort: **PEAQtv57** (in [app/js/config.js](app/js/config.js) änderbar).
+
+## Aufbau
+
+| Datei | Zweck |
+| --- | --- |
+| [app/index.html](app/index.html) | Zugangsseite: Logo links oben, schwarzer Button → Passwortfeld |
+| [app/dashboard.html](app/dashboard.html) | Dashboard: Modulleiste + Gesamtvideo, „MODULAUSWAHL" rechts oben |
+| [app/js/config.js](app/js/config.js) | Passwort, Clip-Bibliothek, Modul-Slots |
+| [app/js/dashboard.js](app/js/dashboard.js) | Modulleiste, Tausch-Logik, Playback über alle Module |
+| [app/css/style.css](app/css/style.css) | Gestaltung (Verlauf #b4b0a9 → #d3d1cd, Module #d6d4d0, OCR-A) |
+| [server.js](server.js) | Statischer Server mit Range-Support (Scrubbing) + Export-Schnittstelle |
+| `Export/` | Zielordner der exportierten Gesamtvideos |
+
+Die Videos werden direkt aus `Footage/Modul Videos/` gelesen – nichts wird kopiert.
+
+## Bedienung
+
+* **Ziehen** – Modul horizontal an eine andere Stelle schieben. Sobald die Mitte eines anderen Moduls überschritten wird, rutscht dieses weich zur Seite und gibt den Platz frei. Der Modulname gehört zum Video (Nummer aus dem Dateinamen) und wandert beim Verschieben mit.
+* **Modul-Kästchen anklicken** – springt im Gesamtvideo an den Anfang dieses Moduls
+* **✕ rechts oben am Video** – Modul ausgrauen (fliegt aus Timeline, Gesamtlänge und Export); der Button wird zu **+** zum Wiedereinschalten
+* **Schwarze Leiste unter dem Modul (V1 / V2)** – Variante umschalten. Sie erscheint nur bei Clips, die „Variante" im Dateinamen tragen.
+* **Doppelklick auf das Vorschaubild** – Auswahlmenü mit allen Clips der Bibliothek plus „EIGENES VIDEO …" (Datei vom Rechner)
+* **Abspielstrich** – wandert live über die Modulkästchen; das gerade laufende Modul wird aufgehellt und hervorgehoben
+* **Zeitanzeige** – aktuelle Position / Gesamtlänge aller aktiven Module
+* **Tastatur** – Leertaste = Play/Pause, ←/→ = 2 Sekunden springen
+* Reihenfolge und Auswahl werden im Browser gespeichert; **ZURÜCKSETZEN** stellt den Ausgangszustand her.
+
+## Text-Inserts
+
+Unter der Modulleiste liegt die zunächst kaum sichtbare Zeile **⊕ TEXT INSERTS**. Ein
+Klick fächert in jedem Modulkästchen ein schwarzes Textfeld auf – es sitzt im Kästchen
+selbst, über die volle Breite am unteren Rand, und wird beim Verschieben mitgenommen.
+Darunter steht die Ausrichtung **L / M / R** (links, mittig, rechts, je mit 6 %
+Randabstand).
+
+* **Bis zu 30 Zeichen**, ab 15 Zeichen zweizeilig – umgebrochen wird am letzten Wortende davor, sonst hart.
+* Schriftgröße = Bildbreite ÷ 13, Laufweite −0,03 em, Textmitte auf 57 % der Bildhöhe (knapp unter der Bildmitte).
+* Bewegung: schnell von unten herein und weich auslaufend, danach ohne Stillstand langsam weiter nach oben gleitend, zum Schluss beschleunigt nach oben hinaus mit Ausblendung.
+
+Die Eingaben werden gespeichert und beim Export eingebrannt.
+
+Die Vorschau ist maßstabsgetreu: Der Player nimmt die volle Breite ein und lässt links
+und rechts schwarze Flächen, wenn das Bild kleiner ist; die Inserts richten sich am
+tatsächlichen Bildbereich aus und skalieren mit ihm – was in der Vorschau steht, sitzt
+im Export an derselben Stelle.
+
+Technisch: Die Anwendung setzt den Text im Browser in OCR-A auf ein transparentes PNG
+(3840 px breit) und schickt es mit; ffmpeg legt es per `overlay` mit animierter Position
+und Alpha-Blende in das Video. So sieht der Export exakt aus wie die Vorschau, und es
+wird kein `drawtext`/freetype im ffmpeg-Build benötigt (der hier vorhandene hat es nicht).
+
+## Layout speichern und laden
+
+**LAYOUT SPEICHERN** legt die komplette Zusammenstellung als JSON ab – Reihenfolge,
+gewählte Varianten, aktive Module, Text-Inserts samt Ausrichtung, Cliplängen und
+Gesamtlänge. In Chrome/Edge öffnet sich dafür eine **Ordnerauswahl**; wo diese
+Programmierschnittstelle fehlt, wird die Datei stattdessen heruntergeladen.
+
+**LAYOUT LADEN** liest so eine Datei wieder ein und stellt alles wieder her. Die Clips
+werden über den Dateinamen zugeordnet (ersatzweise über die Bezeichnung); fehlende
+Videos werden übersprungen und in der Meldung genannt.
+
+## Export
+
+**EXPORT MP4 (H.264)** fügt alle aktiven Module in der aktuellen Reihenfolge zu einer
+Datei zusammen und legt sie in `Export/` ab; der Download startet automatisch.
+
+Haben alle beteiligten Clips dieselbe Auflösung und denselben Codec **und ist kein
+Text-Insert gesetzt**, werden sie verlustfrei aneinandergehängt (`-c copy`) – kein
+Qualitätsverlust, ein bis zwei Sekunden.
+Sonst wird auf die größte vorkommende Auflösung skaliert und neu codiert
+(libx264 CRF 18, sonst NVENC); für 24 Sekunden 4K sind das rund 20 Sekunden.
+
+**Achtung:** `5 - Modul - Sound Feature.mp4` liegt in 1920×1080 vor, alle anderen Clips in
+3840×2160. Solange dieses Modul aktiv ist, läuft daher immer der Neu-Codierungsweg und der
+HD-Clip wird auf 4K hochskaliert. Eine 4K-Fassung dieses Clips würde den verlustfreien
+Export wiederherstellen.
+
+ffmpeg wird automatisch gesucht: PATH, Topaz-Installation, übliche Installationsordner.
+Ein eigener Pfad lässt sich per Umgebungsvariable setzen:
+
+```bash
+set FFMPEG=C:\ffmpeg\bin\ffmpeg.exe && node server.js
+```
+
+Ohne ffmpeg bleibt der Export-Button deaktiviert; empfohlene Installation:
+`winget install Gyan.FFmpeg`.
+
+## Module erweitern
+
+Die Bibliothek wird beim Aufruf direkt aus `Footage/Modul Videos/` gelesen – neue
+Dateien erscheinen ohne Codeänderung. Maßgeblich ist das Namensschema:
+
+```text
+<Modulnummer> - Modul - <Name>.mp4      z. B.  1 - Modul - Intro Variante2.mp4
+```
+
+* **„Variante" im Namen** = Alternative desselben Moduls. Alle Varianten einer Modulnummer teilen sich ein Kästchen und werden über die schwarze Leiste (V1 / V2 …) umgeschaltet; in der Timeline liegt immer nur die gewählte.
+* **Alle übrigen Clips** sind eigene Module und laufen nacheinander – auch mehrere mit derselben Modulnummer (z. B. Detailshot 1 und 2).
+* Das Schlüsselwort steht in `server.js` unter `VARIANT_RX`.
+* Die Breite der Kästchen richtet sich nach der Cliplänge, damit der Abspielstrich maßstabsgetreu läuft; bei vielen Modulen wird der Maßstab so weit verkleinert, dass alle nebeneinander passen.
+
+Die Listen in `app/js/config.js` sind nur die Rückfalllösung, wenn die Seite ohne den
+lokalen Server geöffnet wird.
+
+## Hinweise
+
+* Die Passwortabfrage ist eine reine Oberflächensperre im Browser (Passwort steht in
+  `config.js`). Für eine echte Zugangssicherung online braucht es serverseitigen Schutz.
+* Die Schrift OCR-A wird zuerst aus der lokalen Installation („OCR-A BT") geladen und
+  fällt sonst auf die mitgelieferte `app/assets/ocr-a.ttf` zurück.

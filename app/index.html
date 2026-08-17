@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PEAQ – Zugang</title>
+  <link rel="icon" href="assets/peaq-logo.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <header class="topbar">
+    <img class="logo" src="assets/peaq-logo.png" alt="PEAQ">
+    <span class="topbar-label"></span>
+  </header>
+
+  <main class="gate">
+    <div class="gate-box">
+      <form id="pwForm" class="pw-form" autocomplete="off">
+        <input id="pw" type="password" placeholder="PASSWORT" aria-label="Passwort" autofocus>
+        <button class="pw-ok" type="submit">OK</button>
+      </form>
+
+      <p id="gateError" class="gate-error"></p>
+    </div>
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/login.js"></script>
+</body>
+</html>
