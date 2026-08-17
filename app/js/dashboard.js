@@ -1403,7 +1403,7 @@
     }
 
     const check = window.PeaqRender
-      ? await PeaqRender.probe()
+      ? await PeaqRender.probe({ force: forcedEngine })
       : { ok: false, reason: 'render.js nicht geladen' };
 
     if (!check.ok) {
@@ -1441,15 +1441,6 @@
       if (forcedEngine === 'server')  serverRender = true;
 
       await announceEngine();
-
-      if (forcedEngine === 'wasm' && !serverRender) {
-        renderMode = 'wasm';
-        maxRenderWidth = 1920;
-        const uhd = resSelect.querySelector('option[value="3840x2160"]');
-        if (uhd) uhd.remove();
-        resSelect.value = '1920x1080';
-        note('RENDERT IM BROWSER (H.264 SOFTWARE · HD · DAUERT EINIGE MINUTEN)');
-      }
     });
 
   /* ---------- Kopfzeile / Fußzeile ---------- */

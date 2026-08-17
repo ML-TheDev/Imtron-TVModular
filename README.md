@@ -115,7 +115,12 @@ Mit `?render=browser` bzw. `?render=server` an der Adresse lässt sich der Weg e
 Browser kann, und wählt danach:
 
 * **Chrome / Edge** – WebCodecs mit Hardware-Encoder, 4K in Sekunden.
-* **Firefox / Safari** – dort fehlt ein H.264-Encoder (Patentgründe). Deshalb liegt ein
+* **Firefox** – wird über die Browserkennung erkannt und nimmt **sofort den
+  Software-Encoder**, ohne Encoder-Test. Grund: Firefox meldet auf
+  `isConfigSupported` „unterstützt", liefert dann aber keine Daten – der Export blieb
+  dadurch hängen. Mit `?render=native` lässt sich der Umweg überspringen, falls Firefox
+  später einen H.264-Encoder mitbringt.
+* **Andere Browser ohne brauchbaren Encoder** – dort fehlt H.264 ebenfalls. Deshalb liegt ein
   Software-Encoder als WebAssembly bei ([app/vendor/h264-mp4-encoder.web.js](app/vendor/h264-mp4-encoder.web.js),
   minih264 + MP4-Muxer, MIT, 1,6 MB, wird nur bei Bedarf geladen). Die Bilder kommen
   über ein `<video>`-Element, der Text wird per Canvas eingebrannt. Ausgabe ist echtes

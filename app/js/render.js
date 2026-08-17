@@ -206,10 +206,27 @@ window.PeaqRender = (function () {
     }
   }
 
+  const IS_FIREFOX = /firefox|fxios/i.test(navigator.userAgent || '');
+
+  const softwareResult = grund => ({
+    ok: true, mode: 'wasm', codec: 'avc1 (Software)', maxWidth: 1920, grund: grund
+  });
+
   /* Vorab klären, wie dieser Browser H.264 schreiben kann:
      "native"  = WebCodecs-Encoder mit Hardware (Chrome, Edge)
-     "wasm"    = mitgelieferter Software-Encoder (Firefox, Safari)          */
-  async function probe() {
+     "wasm"    = mitgelieferter Software-Encoder (Firefox)                  */
+  async function probe(opts) {
+    const force = (opts && opts.force) || '';
+
+    if (force === 'wasm') return softwareResult('erzwungen');
+
+    /* Firefox hat keinen H.264-Encoder, meldet aber "unterstützt".
+       Deshalb dort ohne Umwege den Software-Encoder nehmen. */
+    if (IS_FIREFOX && force !== 'native') {
+      console.info('[PEAQ] Firefox erkannt – Software-Encoder wird verwendet');
+      return softwareResult('firefox');
+    }
+
     const nativeReady =
       typeof window.VideoEncoder === 'function' &&
       typeof window.VideoDecoder === 'function' &&
@@ -235,7 +252,7 @@ window.PeaqRender = (function () {
 
     /* Software-Encoder braucht nur Canvas und ein <video> zum Auslesen */
     if (typeof document.createElement('canvas').getContext === 'function') {
-      return { ok: true, mode: 'wasm', codec: 'avc1 (Software)', maxWidth: 1920 };
+      return softwareResult('kein brauchbarer Encoder im Browser');
     }
 
     return { ok: false, reason: 'dieser Browser kann kein Video schreiben' };
