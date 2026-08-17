@@ -57,6 +57,10 @@
 
       <div class="export-row">
         <button id="exportBtn" class="btn-export" type="button">EXPORT MP4 (H.264)</button>
+        <select id="resSelect" class="res-select" aria-label="Auflösung">
+          <option value="3840x2160">4K · 3840×2160</option>
+          <option value="1920x1080">HD · 1920×1080</option>
+        </select>
         <button id="layoutBtn" class="btn-export" type="button">LAYOUT SPEICHERN</button>
         <button id="layoutLoadBtn" class="btn-export" type="button">LAYOUT LADEN</button>
         <span id="exportNote" class="export-note"></span>
@@ -92,11 +96,27 @@
 
   </main>
 
+  <div id="renderModal" class="render-modal" hidden>
+    <div class="render-box">
+      <div class="render-title">VIDEO WIRD GERENDERT</div>
+      <div id="renderStep" class="render-step">VORBEREITUNG …</div>
+      <div class="render-track"><div id="renderBar" class="render-fill"></div></div>
+      <div class="render-foot">
+        <span id="renderPct">0 %</span>
+        <span id="renderEngine" class="render-engine"></span>
+        <button id="renderCancel" class="render-cancel" type="button">ABBRECHEN</button>
+      </div>
+    </div>
+  </div>
+
   <video id="preloader" preload="auto" muted style="display:none"></video>
   <input id="fileInput" type="file" accept="video/*" hidden>
   <input id="layoutInput" type="file" accept="application/json,.json" hidden>
 
+  <script src="vendor/mp4box.all.min.js"></script>
+  <script src="vendor/mp4-muxer.min.js"></script>
   <script src="js/config.js"></script>
+  <script src="js/render.js"></script>
   <script src="js/dashboard.js"></script>
 </body>
 </html>

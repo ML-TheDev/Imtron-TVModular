@@ -24,6 +24,8 @@ Passwort: **PEAQtv57** (in [app/js/config.js](app/js/config.js) änderbar).
 | [app/dashboard.html](app/dashboard.html) | Dashboard: Modulleiste + Gesamtvideo, „MODULAUSWAHL" rechts oben |
 | [app/js/config.js](app/js/config.js) | Passwort, Clip-Bibliothek, Modul-Slots |
 | [app/js/dashboard.js](app/js/dashboard.js) | Modulleiste, Tausch-Logik, Playback über alle Module |
+| [app/js/render.js](app/js/render.js) | Insert-Darstellung und Rendern im Browser (WebCodecs) |
+| `app/vendor/` | mp4box.js und mp4-muxer (MIT) für das Rendern im Browser |
 | [app/css/style.css](app/css/style.css) | Gestaltung (Verlauf #b4b0a9 → #d3d1cd, Module #d6d4d0, OCR-A) |
 | [server.js](server.js) | Statischer Server mit Range-Support (Scrubbing) + Export-Schnittstelle |
 | `Export/` | Zielordner der exportierten Gesamtvideos |
@@ -79,11 +81,28 @@ Videos werden übersprungen und in der Meldung genannt.
 
 ## Export
 
-**EXPORT MP4 (H.264)** fügt alle aktiven Module in der aktuellen Reihenfolge zu einer
-Datei zusammen und legt sie in `Export/` ab; der Download startet automatisch.
+**EXPORT MP4 (H.264)** fügt alle aktiven Module in der aktuellen Reihenfolge zusammen,
+brennt die Text-Inserts ein und startet den Download. Daneben steht die Auswahl der
+Auflösung (4K oder HD). Während des Renderns zeigt ein Fenster den aktuellen Schritt,
+einen Fortschrittsbalken und die Prozentzahl; **ABBRECHEN** stoppt den Lauf.
 
-Haben alle beteiligten Clips dieselbe Auflösung und denselben Codec **und ist kein
-Text-Insert gesetzt**, werden sie verlustfrei aneinandergehängt (`-c copy`) – kein
+Es gibt zwei Render-Wege, die Anwendung wählt selbst:
+
+| Weg | wann | Eigenschaften |
+| --- | --- | --- |
+| **ffmpeg, lokal** | wenn der lokale Server läuft und ffmpeg findet | volle ffmpeg-Qualität, kann ohne Inserts verlustfrei kopieren, Ergebnis landet in `Export/`; Fortschritt kommt aus `-progress` |
+| **WebCodecs, im Browser** | online, z. B. auf Vercel | rendert im Browser mit dem Hardware-Encoder, ganz ohne Server; gemessen rund 2 s für 8 s Material in 4K, Ergebnis geht in den Download-Ordner |
+
+Mit `?render=browser` bzw. `?render=server` an der Adresse lässt sich der Weg erzwingen.
+Das Rendern im Browser braucht Chrome oder Edge und nutzt
+[app/vendor/mp4box.all.min.js](app/vendor/mp4box.all.min.js) zum Demuxen sowie
+[app/vendor/mp4-muxer.min.js](app/vendor/mp4-muxer.min.js) zum Schreiben der MP4 (beide
+MIT-Lizenz, mitgeliefert). Größe, Laufweite, Position und Bewegung der Inserts liegen
+gemeinsam in [app/js/render.js](app/js/render.js), damit Vorschau, Browser-Render und
+ffmpeg-Export gleich aussehen.
+
+Beim ffmpeg-Weg gilt: Haben alle Clips dieselbe Auflösung und denselben Codec **und ist
+kein Text-Insert gesetzt**, werden sie verlustfrei aneinandergehängt (`-c copy`) – kein
 Qualitätsverlust, ein bis zwei Sekunden.
 Sonst wird auf die größte vorkommende Auflösung skaliert und neu codiert
 (libx264 CRF 18, sonst NVENC); für 24 Sekunden 4K sind das rund 20 Sekunden.

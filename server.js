@@ -182,14 +182,46 @@ function stamp() {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 }
 
-function runFfmpeg(args) {
+/* ffmpeg ausführen; onProgress bekommt den Fortschritt 0..1 */
+function runFfmpeg(args, totalSeconds, onProgress) {
   return new Promise(resolve => {
-    const proc = spawn(FFMPEG.bin, args);
+    const full = totalSeconds
+      ? ['-progress', 'pipe:1', '-nostats'].concat(args)
+      : args;
+
+    const proc = spawn(FFMPEG.bin, full);
     let log = '';
+
     proc.stderr.on('data', d => { log += d.toString(); });
+
+    if (totalSeconds && onProgress) {
+      let rest = '';
+      proc.stdout.on('data', d => {
+        rest += d.toString();
+        const lines = rest.split('\n');
+        rest = lines.pop();
+        lines.forEach(line => {
+          const m = /^out_time_us=(\d+)/.exec(line.trim());
+          if (m) onProgress(Math.min(1, +m[1] / 1e6 / totalSeconds));
+        });
+      });
+    }
+
     proc.on('error', err => resolve({ ok: false, log: String(err) }));
     proc.on('close', code => resolve({ ok: code === 0, log: log.slice(-4000) }));
   });
+}
+
+/* ---------------- Aufträge ---------------- */
+
+const jobs = new Map();
+let jobCounter = 0;
+
+function newJob() {
+  const id = 'job-' + (++jobCounter) + '-' + Math.abs(Date.now() % 1000000);
+  jobs.set(id, { id, percent: 0, step: 'Vorbereitung', done: false });
+  setTimeout(() => jobs.delete(id), 60 * 60 * 1000);
+  return jobs.get(id);
 }
 
 /* ---------------- Clip-Bibliothek aus dem Footage-Ordner ---------------- */
@@ -289,7 +321,19 @@ async function handleExport(req, res) {
     tempPngs.push(file);
   });
 
+  /* Auftrag anlegen und sofort antworten – der Fortschritt wird abgefragt */
+  const job = newJob();
+  json(res, 202, { jobId: job.id });
+
+  runExportJob(job, items, files, payload).catch(err => {
+    job.done  = true;
+    job.error = String(err && err.message || err);
+  });
+}
+
+async function runExportJob(job, items, files, payload) {
   const hasText = items.some(it => it.pngFile);
+  const tempPngs = items.filter(it => it.pngFile).map(it => it.pngFile);
 
   fs.mkdirSync(EXPORT_DIR, { recursive: true });
 
@@ -303,11 +347,20 @@ async function handleExport(req, res) {
   const name = `PEAQ_Gesamtvideo_${stamp()}.mp4`;
   const out  = path.join(EXPORT_DIR, name);
 
+  job.step = 'Videos prüfen';
+
   /* Passen alle Clips zueinander, wird verlustfrei kopiert */
   const specs   = files.map(inspect);
   const known   = specs.filter(Boolean);
+  const totalSeconds = known.reduce((sum, s) => sum + (s.duration || 4), 0) || 4;
+
+  /* Wunschauflösung aus der Anfrage, sonst die größte vorkommende */
+  const wantW = parseInt(payload.width, 10)  || 0;
+  const wantH = parseInt(payload.height, 10) || 0;
+
   const uniform = known.length === files.length && known.every(s =>
-    s.width === known[0].width && s.height === known[0].height && s.codec === known[0].codec);
+    s.width === known[0].width && s.height === known[0].height && s.codec === known[0].codec)
+    && (!wantW || wantW === known[0].width) && (!wantH || wantH === known[0].height);
 
   let result = { ok: false, log: '' };
   let mode   = 'copy';
@@ -315,10 +368,11 @@ async function handleExport(req, res) {
 
   /* Mit Text-Inserts muss codiert werden – Kopieren kann keinen Text einbrennen */
   if (uniform && !hasText) {
+    job.step = 'Module verlustfrei zusammenfügen';
     result = await runFfmpeg([
       '-hide_banner', '-y', '-f', 'concat', '-safe', '0', '-i', listPath,
       '-c', 'copy', '-movflags', '+faststart', out
-    ]);
+    ], totalSeconds, p => { job.percent = Math.round(p * 100); });
   }
 
   /* Sonst: auf die größte Auflösung skalieren, Texte einbrennen und neu codieren */
@@ -331,14 +385,14 @@ async function handleExport(req, res) {
 
     if (!encoder) {
       try { fs.unlinkSync(listPath); } catch (e) { /* egal */ }
-      json(res, 500, { error: 'Kein H.264-Encoder verfügbar und verlustfreies Zusammenfügen nicht möglich.' });
-      return;
+      throw new Error('Kein H.264-Encoder verfügbar und verlustfreies Zusammenfügen nicht möglich.');
     }
 
-    const W = known.length ? Math.max.apply(null, known.map(s => s.width))  : 3840;
-    const H = known.length ? Math.max.apply(null, known.map(s => s.height)) : 2160;
+    const W = wantW || (known.length ? Math.max.apply(null, known.map(s => s.width))  : 3840);
+    const H = wantH || (known.length ? Math.max.apply(null, known.map(s => s.height)) : 2160);
     target  = { width: W, height: H };
     mode    = FFMPEG.x264 ? 'libx264' : 'h264_nvenc';
+    job.step = 'Module codieren' + (hasText ? ' und Text-Inserts einbrennen' : '');
 
     const inputs = [];
     files.forEach(f => inputs.push('-i', f));
@@ -365,7 +419,9 @@ async function handleExport(req, res) {
     result = await runFfmpeg(
       ['-hide_banner', '-y'].concat(inputs, [
         '-filter_complex', filter, '-map', '[out]'
-      ], encoder, ['-movflags', '+faststart', out])
+      ], encoder, ['-movflags', '+faststart', out]),
+      totalSeconds,
+      p => { job.percent = Math.round(p * 100); }
     );
   }
 
@@ -373,11 +429,16 @@ async function handleExport(req, res) {
   tempPngs.forEach(f => { try { fs.unlinkSync(f); } catch (e) { /* egal */ } });
 
   if (!result.ok || !fs.existsSync(out)) {
-    json(res, 500, { error: 'Export fehlgeschlagen.', detail: result.log });
+    job.done  = true;
+    job.error = 'Export fehlgeschlagen';
+    job.detail = result.log;
     return;
   }
 
-  json(res, 200, {
+  Object.assign(job, {
+    percent: 100,
+    step: 'fertig',
+    done: true,
     name,
     url: '/Export/' + encodeURIComponent(name) + '?dl=1',
     size: fs.statSync(out).size,
@@ -412,6 +473,12 @@ http.createServer(async (req, res) => {
   const rel = decodeURIComponent(url.pathname);
 
   if (req.method === 'POST' && rel === '/api/export') return handleExport(req, res);
+
+  if (rel === '/api/export/status') {
+    const job = jobs.get(url.searchParams.get('id'));
+    return job ? json(res, 200, job) : json(res, 404, { error: 'Auftrag unbekannt' });
+  }
+
   if (req.method === 'POST' && rel === '/api/upload') return handleUpload(req, res, url.searchParams);
 
   if (rel === '/api/library') {

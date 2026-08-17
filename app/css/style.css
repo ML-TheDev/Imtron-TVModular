@@ -769,11 +769,106 @@ button.foot-item:hover .foot-key { text-decoration: underline; }
 .btn-export:hover    { background: #1e1e1e; }
 .btn-export:disabled { opacity: .45; cursor: default; }
 
+.res-select {
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: .12em;
+  color: var(--ink);
+  background: rgba(255, 255, 255, .45);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 10px 8px;
+  cursor: pointer;
+}
+
 .export-note {
   font-size: 9px;
   letter-spacing: .16em;
   color: var(--ink-soft);
 }
+
+/* ---------------- Fortschrittsfenster ---------------- */
+
+.render-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(17, 17, 17, .45);
+  backdrop-filter: blur(2px);
+}
+
+.render-modal[hidden] { display: none; }
+
+.render-box {
+  width: min(460px, calc(100% - 48px));
+  background: #000;
+  color: #f2f1ee;
+  border-radius: 8px;
+  padding: 22px 24px 18px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .35);
+  animation: fade-in .2s ease both;
+}
+
+.render-title {
+  font-size: 12px;
+  letter-spacing: .24em;
+}
+
+.render-step {
+  margin-top: 10px;
+  font-size: 10px;
+  letter-spacing: .14em;
+  color: rgba(242, 241, 238, .6);
+  min-height: 14px;
+}
+
+.render-track {
+  margin-top: 16px;
+  height: 6px;
+  background: rgba(242, 241, 238, .16);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.render-fill {
+  width: 0;
+  height: 100%;
+  background: #f2f1ee;
+  border-radius: 3px;
+  transition: width .2s linear;
+}
+
+.render-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  font-size: 10px;
+  letter-spacing: .14em;
+}
+
+.render-engine {
+  flex: 1;
+  color: rgba(242, 241, 238, .45);
+  font-size: 9px;
+}
+
+.render-cancel {
+  font-family: inherit;
+  font-size: 9px;
+  letter-spacing: .16em;
+  color: rgba(242, 241, 238, .6);
+  background: none;
+  border: 1px solid rgba(242, 241, 238, .28);
+  border-radius: 3px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.render-cancel:hover { color: #f2f1ee; border-color: #f2f1ee; }
 
 .export-note.is-error { color: #7a1414; }
 

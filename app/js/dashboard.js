@@ -54,18 +54,22 @@
   const inserts   = [];            // DOM-Referenzen je Text-Insert
   const segments  = [];            // DOM-Referenzen je Timeline-Segment
 
-  const MAX_TEXT       = 30;       // Zeichen pro Insert
-  const LINE_BREAK     = 15;       // ab hier wird umgebrochen
-  const INSERT_SIZE_DIV = 13;      // Schriftgröße = Bildbreite / 13 (Vorschau wie Export)
-  const INSERT_TRACK    = -0.03;   // Laufweite in em (negativ = enger zusammen)
-  const INSERT_BASE     = 0.57;    // Höhe der Textmitte, Anteil der Bildhöhe (knapp unter der Mitte)
+  /* Alle Insert-Werte stammen aus js/render.js, damit Vorschau, Browser-Render
+     und Server-Export dieselbe Darstellung ergeben. */
+  const IC = (window.PeaqRender && PeaqRender.CONST) || {
+    MAX_TEXT: 30, LINE_BREAK: 15, SIZE_DIV: 13, TRACK: -0.03, BASE: 0.57,
+    IN: 1.20, FADE: 0.45, OUT: 0.35, MOVE: 0.030, DRIFT: 0.006
+  };
 
-  /* Bewegung des Inserts – dieselben Werte nutzt der Export (server.js) */
-  const TXT_IN    = 1.20;          // Einfahren von unten, langsam auslaufend
-  const TXT_FADE  = 0.45;          // Deckkraft beim Einfahren
-  const TXT_OUT   = 0.35;          // Hinausfliegen nach oben, beschleunigend
-  const TXT_MOVE  = 0.030;         // Weg beim Ein-/Ausfahren, Anteil der Bildhöhe
-  const TXT_DRIFT = 0.006;         // leichtes Nachgleiten im Stand, Anteil der Bildhöhe
+  const MAX_TEXT        = IC.MAX_TEXT;
+  const INSERT_SIZE_DIV = IC.SIZE_DIV;
+  const INSERT_TRACK    = IC.TRACK;
+  const INSERT_BASE     = IC.BASE;
+  const TXT_IN    = IC.IN;
+  const TXT_FADE  = IC.FADE;
+  const TXT_OUT   = IC.OUT;
+  const TXT_MOVE  = IC.MOVE;
+  const TXT_DRIFT = IC.DRIFT;
   const TEXT_IN    = 0.22;         // Einblendung in Sekunden
   const TEXT_OUT   = 0.22;         // Ausblendung in Sekunden
   const TEXT_LEAD  = 0.30;         // so früh vor Modulende beginnt das Ausblenden
@@ -100,17 +104,8 @@
 
   const cleanText  = t => String(t || '').slice(0, MAX_TEXT);
 
-  /* Ab 15 Zeichen zweizeilig – möglichst am letzten Wortende davor */
-  function textLines(text) {
-    const t = String(text || '');
-    if (t.length <= LINE_BREAK) return [t];
-
-    const head  = t.slice(0, LINE_BREAK + 1);
-    const space = head.lastIndexOf(' ');
-    const cut   = space > 0 ? space : LINE_BREAK;
-
-    return [t.slice(0, cut).trim(), t.slice(space > 0 ? cut + 1 : cut).trim()].filter(Boolean);
-  }
+  /* Ab 15 Zeichen zweizeilig (Logik in js/render.js) */
+  const textLines = t => window.PeaqRender ? PeaqRender.textLines(t) : [String(t || '')];
   const cleanAlign = a => (a === 'left' || a === 'right') ? a : 'center';
 
   function loadState() {
@@ -996,116 +991,176 @@
 
   const mb = bytes => (bytes / 1048576).toFixed(1);
 
-  /* Insert-Text als transparentes PNG für den Export (3840 px breit, OCR-A).
-     Größe, Laufweite und Ausrichtung entsprechen der Vorschau. */
-  const INSERT_PNG_W  = 3840;
-  const INSERT_PNG_H  = 1100;      // Platz für zwei Zeilen
-  const INSERT_PAD    = 0.06;      // Seitenabstand bei links-/rechtsbündig
-  const INSERT_LEAD   = 1.14;      // Zeilenabstand
+  /* Insert-Text als transparentes PNG für den Server-Export (gemeinsame
+     Zeichenlogik mit dem Browser-Renderer, siehe js/render.js) */
+  const insertPng = (text, align) =>
+    window.PeaqRender ? PeaqRender.insertPngDataUrl(text, align, 3840) : Promise.resolve(null);
 
-  async function insertPng(text, align) {
-    if (!text) return null;
-    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+  /* ---------- Fortschrittsfenster ---------- */
 
-    const c   = document.createElement('canvas');
-    c.width   = INSERT_PNG_W;
-    c.height  = INSERT_PNG_H;
-    const ctx = c.getContext('2d');
+  const modal       = document.getElementById('renderModal');
+  const modalStep   = document.getElementById('renderStep');
+  const modalBar    = document.getElementById('renderBar');
+  const modalPct    = document.getElementById('renderPct');
+  const modalEngine = document.getElementById('renderEngine');
+  const modalCancel = document.getElementById('renderCancel');
+  const resSelect   = document.getElementById('resSelect');
 
-    const size = Math.round(INSERT_PNG_W / INSERT_SIZE_DIV);
-    const pad  = Math.round(INSERT_PNG_W * INSERT_PAD);
+  let cancelRender = false;
 
-    ctx.font         = size + 'px OCRA, monospace';
-    ctx.textBaseline = 'middle';
-    ctx.textAlign    = 'left';
-    if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';   // Laufweite setzen wir selbst
+  function showModal(engine) {
+    cancelRender = false;
+    modal.hidden = false;
+    modalEngine.textContent = engine;
+    setProgress(0, 'VORBEREITUNG …');
+  }
 
-    const track = size * INSERT_TRACK;
+  function hideModal() { modal.hidden = true; }
 
-    /* Bezugspunkt je Ausrichtung: linke Kante, Mitte oder rechte Kante */
-    const anchor = align === 'left'  ? pad
-                 : align === 'right' ? INSERT_PNG_W - pad
-                 : INSERT_PNG_W / 2;
+  function setProgress(percent, step) {
+    const p = Math.max(0, Math.min(100, percent || 0));
+    modalBar.style.width = p.toFixed(1) + '%';
+    modalPct.textContent = Math.round(p) + ' %';
+    if (step) modalStep.textContent = step;
+  }
 
-    ctx.shadowColor   = 'rgba(0,0,0,.55)';
-    ctx.shadowBlur    = Math.round(size * 0.35);
-    ctx.shadowOffsetY = Math.round(size * 0.06);
-    ctx.fillStyle     = '#ffffff';
+  modalCancel.addEventListener('click', () => {
+    cancelRender = true;
+    setProgress(100, 'WIRD ABGEBROCHEN …');
+  });
 
-    /* Zeilenblock mittig zur Bildmitte setzen, Zeichen einzeln mit Laufweite setzen */
-    const lines = textLines(text);
-    const step  = size * INSERT_LEAD;
-    const start = INSERT_PNG_H / 2 - (lines.length - 1) * step / 2;
+  function targetSize() {
+    const [w, h] = (resSelect.value || '3840x2160').split('x').map(Number);
+    return { width: w, height: h };
+  }
 
-    lines.forEach((line, i) => {
-      const chars  = Array.from(line);
-      const widths = chars.map(ch => ctx.measureText(ch).width);
-      const total  = widths.reduce((a, b) => a + b, 0) + track * Math.max(0, chars.length - 1);
+  function startDownload(url, name) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.click();
+  }
 
-      let x = align === 'left' ? anchor : align === 'right' ? anchor - total : anchor - total / 2;
-      const y = start + i * step;
+  /* Rendern auf dem lokalen Server (ffmpeg), Fortschritt wird abgefragt */
+  async function exportViaServer(line, size) {
+    const items = [];
 
-      chars.forEach((ch, n) => { ctx.fillText(ch, x, y); x += widths[n] + track; });
+    for (const seg of line) {
+      const clip = getClip(state[seg.index].clip);
+      const txt  = state[seg.index].text || '';
+      const png  = await insertPng(txt, state[seg.index].align || 'center');
+
+      if (clip.custom) {
+        if (!clip.serverPath) {
+          if (!clip.file) throw new Error('Eigenes Video nicht verfügbar');
+          setProgress(0, 'ÜBERTRAGE ' + clip.label + ' …');
+          const up = await fetch('/api/upload?name=' + encodeURIComponent(clip.file.name), {
+            method: 'POST', body: clip.file
+          });
+          const upData = await up.json();
+          if (!up.ok) throw new Error(upData.error || 'Übertragung fehlgeschlagen');
+          clip.serverPath = upData.path;
+        }
+        items.push({ path: clip.serverPath, text: txt, png: png });
+      } else {
+        items.push({ path: clip.src, text: txt, png: png });
+      }
+    }
+
+    setProgress(1, 'AUFTRAG WIRD GESTARTET …');
+
+    const res = await fetch('/api/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items, width: size.width, height: size.height })
+    });
+    const start = await res.json();
+    if (!res.ok) throw new Error(start.error || 'Export fehlgeschlagen');
+
+    /* Fortschritt abfragen, bis der Auftrag fertig ist */
+    for (;;) {
+      await new Promise(r => setTimeout(r, 400));
+      const st = await (await fetch('/api/export/status?id=' + encodeURIComponent(start.jobId))).json();
+
+      setProgress(st.percent || 0, (st.step || '').toUpperCase() + ' …');
+
+      if (st.error) throw new Error(st.error);
+      if (st.done) {
+        startDownload(st.url, st.name);
+        return {
+          name: st.name, size: st.size, mode: st.mode,
+          inserts: st.inserts, resolution: st.resolution, place: 'IM ORDNER EXPORT'
+        };
+      }
+    }
+  }
+
+  /* Rendern im Browser (WebCodecs) – funktioniert auch online ohne Server */
+  async function exportViaBrowser(line, size) {
+    const items = line.map(seg => ({
+      src: srcOf(state[seg.index]),
+      text: state[seg.index].text || '',
+      align: state[seg.index].align || 'center',
+      duration: seg.duration
+    }));
+
+    const blob = await PeaqRender.render({
+      items,
+      width: size.width,
+      height: size.height,
+      cancelled: () => cancelRender,
+      onProgress: p => {
+        const step = p.phase === 'load'   ? 'MODUL ' + p.module + ' VON ' + p.modules + ' WIRD GELADEN …'
+                   : p.phase === 'encode' ? 'MODUL ' + p.module + ' VON ' + p.modules + ' WIRD CODIERT …'
+                   : p.phase === 'finish' ? 'DATEI WIRD GESCHRIEBEN …'
+                   : 'FERTIG';
+        setProgress(p.percent, step);
+      }
     });
 
-    return c.toDataURL('image/png');
+    const name = 'PEAQ_Gesamtvideo_' +
+      new Date().toISOString().slice(0, 16).replace(/[:T-]/g, '') + '.mp4';
+    const url = URL.createObjectURL(blob);
+    startDownload(url, name);
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+
+    return {
+      name, size: blob.size, mode: 'webcodecs',
+      inserts: items.filter(i => i.text).length,
+      resolution: size.width + 'x' + size.height,
+      place: 'IM DOWNLOAD-ORDNER'
+    };
   }
 
   async function runExport() {
     const line = timeline();
     if (!line.length) { note('KEIN AKTIVES MODUL', true); return; }
 
+    const size   = targetSize();
+    const server = serverRender;
+
+    if (!server && !(window.PeaqRender && PeaqRender.supported())) {
+      note('DIESER BROWSER KANN NICHT RENDERN – BITTE CHROME ODER EDGE', true);
+      return;
+    }
+
     exportBtn.disabled = true;
-    note('EXPORT LÄUFT …');
+    note('');
+    showModal(server ? 'FFMPEG · LOKAL' : 'WEBCODECS · IM BROWSER');
 
     try {
-      const items = [];
+      const out = server ? await exportViaServer(line, size) : await exportViaBrowser(line, size);
 
-      for (const seg of line) {
-        const clip = getClip(state[seg.index].clip);
-        const txt  = state[seg.index].text || '';
-        const png  = await insertPng(txt, state[seg.index].align || 'center');
-
-        if (clip.custom) {
-          if (!clip.serverPath) {
-            if (!clip.file) throw new Error('EIGENES VIDEO NICHT VERFÜGBAR');
-            note('ÜBERTRAGE ' + clip.label + ' …');
-            const up = await fetch('/api/upload?name=' + encodeURIComponent(clip.file.name), {
-              method: 'POST', body: clip.file
-            });
-            const upData = await up.json();
-            if (!up.ok) throw new Error(upData.error || 'ÜBERTRAGUNG FEHLGESCHLAGEN');
-            clip.serverPath = upData.path;
-          }
-          items.push({ path: clip.serverPath, text: txt, png: png });
-        } else {
-          items.push({ path: clip.src, text: txt, png: png });
-        }
-      }
-
-      note('FÜGE ' + items.length + ' MODULE ZUSAMMEN …');
-
-      const res = await fetch('/api/export', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error((data.error || 'EXPORT FEHLGESCHLAGEN').toUpperCase());
-
-      note(data.name + ' · ' + mb(data.size) + ' MB · ' +
-           (data.mode === 'copy' ? 'VERLUSTFREI KOPIERT' : data.mode.toUpperCase()) +
-           (data.inserts ? ' · ' + data.inserts + ' TEXT-INSERTS EINGEBRANNT' : '') +
-           ' · IM ORDNER EXPORT');
-
-      /* Download anstoßen, ohne die Seite zu verlassen */
-      const dl = document.createElement('a');
-      dl.href = data.url;
-      dl.download = data.name;
-      dl.click();
+      note(out.name + ' · ' + mb(out.size) + ' MB · ' + out.resolution + ' · ' +
+           (out.mode === 'copy' ? 'VERLUSTFREI KOPIERT' : out.mode.toUpperCase()) +
+           (out.inserts ? ' · ' + out.inserts + ' TEXT-INSERTS EINGEBRANNT' : '') +
+           ' · ' + out.place);
     } catch (e) {
-      note(String(e.message || e).toUpperCase(), true);
+      const msg = String(e.message || e);
+      note(/abgebrochen/i.test(msg) ? 'EXPORT ABGEBROCHEN' : msg.toUpperCase(),
+           !/abgebrochen/i.test(msg));
     } finally {
+      hideModal();
       exportBtn.disabled = false;
     }
   }
@@ -1235,17 +1290,32 @@
     }
   });
 
+  /* Ist ffmpeg über den lokalen Server erreichbar, wird dort gerendert
+     (schneller, kann verlustfrei kopieren) – sonst im Browser. */
+  let serverRender = false;
+
+  function announceEngine() {
+    if (serverRender) {
+      note('RENDERT LOKAL MIT FFMPEG');
+    } else if (window.PeaqRender && PeaqRender.supported()) {
+      note('RENDERT IM BROWSER (WEBCODECS)');
+    } else {
+      exportBtn.disabled = true;
+      note('RENDERN BRAUCHT CHROME ODER EDGE', true);
+    }
+  }
+
+  /* ?render=browser bzw. ?render=server erzwingt eine Variante */
+  const forcedEngine = new URLSearchParams(location.search).get('render');
+
   fetch('/api/status')
     .then(r => r.json())
-    .then(s => {
-      if (!s.ffmpeg) {
-        exportBtn.disabled = true;
-        note('EXPORT NICHT MÖGLICH – FFMPEG FEHLT', true);
-      }
-    })
-    .catch(() => {
-      exportBtn.disabled = true;
-      note('EXPORT NUR ÜBER DEN LOKALEN SERVER (START.CMD)', true);
+    .then(s => { serverRender = !!(s && s.ffmpeg); })
+    .catch(() => { serverRender = false; })
+    .then(() => {
+      if (forcedEngine === 'browser') serverRender = false;
+      if (forcedEngine === 'server')  serverRender = true;
+      announceEngine();
     });
 
   /* ---------- Kopfzeile / Fußzeile ---------- */
