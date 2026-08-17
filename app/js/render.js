@@ -157,6 +157,55 @@ window.PeaqRender = (function () {
     return null;
   }
 
+  /* Wirklich ein Bild codieren. Firefox meldet auf isConfigSupported
+     "unterstützt", liefert dann aber keine Daten – nur dieser Test ist
+     verlässlich. */
+  async function encoderWorks(width, height) {
+    let settle;
+    const result = new Promise(r => { settle = r; });
+    let closed = false;
+    let encoder = null;
+
+    const finish = ok => {
+      if (closed) return;
+      closed = true;
+      try { if (encoder && encoder.state !== 'closed') encoder.close(); } catch (e) { /* egal */ }
+      settle(ok);
+    };
+
+    const timer = setTimeout(() => finish(false), 4000);
+
+    try {
+      const cfg = await pickCodec(width, height, Math.round(width * height * CONST.FPS * 0.15));
+      if (!cfg) { clearTimeout(timer); finish(false); return { ok: false }; }
+
+      encoder = new VideoEncoder({
+        output: () => finish(true),
+        error:  () => finish(false)
+      });
+      encoder.configure(cfg);
+
+      const probeCanvas = new OffscreenCanvas(width, height);
+      const pctx = probeCanvas.getContext('2d', { alpha: false });
+      pctx.fillStyle = '#808080';
+      pctx.fillRect(0, 0, width, height);
+
+      const frame = new VideoFrame(probeCanvas, { timestamp: 0, duration: 40000 });
+      encoder.encode(frame, { keyFrame: true });
+      frame.close();
+
+      encoder.flush().then(() => finish(false), () => finish(false));
+
+      const ok = await result;
+      clearTimeout(timer);
+      return { ok, codec: cfg.codec };
+    } catch (e) {
+      clearTimeout(timer);
+      finish(false);
+      return { ok: false };
+    }
+  }
+
   /* Vorab klären, wie dieser Browser H.264 schreiben kann:
      "native"  = WebCodecs-Encoder mit Hardware (Chrome, Edge)
      "wasm"    = mitgelieferter Software-Encoder (Firefox, Safari)          */
@@ -165,15 +214,22 @@ window.PeaqRender = (function () {
       typeof window.VideoEncoder === 'function' &&
       typeof window.VideoDecoder === 'function' &&
       typeof window.MP4Box === 'object' &&
-      typeof window.Mp4Muxer === 'object';
+      typeof window.Mp4Muxer === 'object' &&
+      typeof window.OffscreenCanvas === 'function';
 
     if (nativeReady) {
       try {
-        const uhd = await pickCodec(3840, 2160, Math.round(3840 * 2160 * CONST.FPS * 0.15));
-        if (uhd) return { ok: true, mode: 'native', codec: uhd.codec, maxWidth: 3840 };
-
-        const hd = await pickCodec(1920, 1080, Math.round(1920 * 1080 * CONST.FPS * 0.15));
-        if (hd) return { ok: true, mode: 'native', codec: hd.codec, maxWidth: 1920 };
+        const hd = await encoderWorks(1920, 1080);
+        if (hd.ok) {
+          const uhd = await encoderWorks(3840, 2160);
+          console.info('[PEAQ] Encoder-Test: HD ok, 4K ' + (uhd.ok ? 'ok' : 'nicht möglich'));
+          return {
+            ok: true, mode: 'native',
+            codec: (uhd.ok ? uhd.codec : hd.codec),
+            maxWidth: uhd.ok ? 3840 : 1920
+          };
+        }
+        console.info('[PEAQ] Encoder-Test: kein brauchbarer H.264-Encoder – Software-Encoder wird genutzt');
       } catch (e) { /* weiter zum Software-Encoder */ }
     }
 
@@ -387,6 +443,24 @@ window.PeaqRender = (function () {
     /* Ohne WebCodecs-Encoder (z. B. Firefox) über den Software-Encoder */
     if (opts.mode === 'wasm' || !supported()) return renderWasm(opts);
 
+    try {
+      return await renderNative(opts);
+    } catch (err) {
+      /* Encoder war doch untauglich – ohne Zutun auf Software umschalten */
+      if (err && err.encoderDead) {
+        console.warn('[PEAQ] WebCodecs-Encoder untauglich, wechsle auf Software-Encoder');
+        if (opts.onProgress) opts.onProgress({ phase: 'fallback', software: true, percent: 0 });
+        const size = opts.width > 1920
+          ? Object.assign({}, opts, { width: 1920, height: 1080 })
+          : opts;
+        return renderWasm(size);
+      }
+      throw err;
+    }
+  }
+
+  async function renderNative(opts) {
+
     const items   = opts.items || [];
     const W       = opts.width;
     const H       = opts.height;
@@ -433,8 +507,9 @@ window.PeaqRender = (function () {
     });
 
     let encodeError = null;
+    let chunkCount  = 0;
     const encoder = new VideoEncoder({
-      output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+      output: (chunk, meta) => { chunkCount++; muxer.addVideoChunk(chunk, meta); },
       error:  e => { encodeError = e; }
     });
     encoder.configure(config);
@@ -497,6 +572,14 @@ window.PeaqRender = (function () {
             globalUs += frameDur;
             doneFrames++;
             touch();
+
+            /* Notbremse: liefert der Encoder nach 20 Bildern nichts,
+               taugt er nicht (so verhält sich Firefox) */
+            if (doneFrames === 20 && chunkCount === 0) {
+              const dead = new Error('Encoder liefert keine Daten');
+              dead.encoderDead = true;
+              throw dead;
+            }
 
             while (encoder.encodeQueueSize > 8) { await tick(); guard(); }
           }

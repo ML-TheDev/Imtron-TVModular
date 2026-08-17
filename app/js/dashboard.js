@@ -1125,7 +1125,13 @@
       cancelled: () => cancelRender,
       onProgress: p => {
         if (p.phase === 'fallback') {
-          hinweis = ' · 4K NICHT MÖGLICH, HD GERENDERT';
+          if (p.software) {
+            hinweis = ' · MIT SOFTWARE-ENCODER GERENDERT';
+            modalEngine.textContent = 'H.264 SOFTWARE · IM BROWSER';
+            setProgress(0, 'ENCODER UNTAUGLICH – WECHSEL AUF SOFTWARE …');
+          } else {
+            hinweis = ' · 4K NICHT MÖGLICH, HD GERENDERT';
+          }
           return;
         }
         const step = p.phase === 'load'
