@@ -111,13 +111,21 @@ Es gibt zwei Render-Wege, die Anwendung wählt selbst:
 
 Mit `?render=browser` bzw. `?render=server` an der Adresse lässt sich der Weg erzwingen.
 
-**Browser:** Das Rendern im Browser braucht **Chrome oder Edge**. Firefox besitzt die
-WebCodecs-Schnittstellen, aber keinen H.264-Encoder; die Anwendung prüft das beim Laden
-mit einer echten Encoder-Abfrage und sperrt den Export dort mit einer klaren Meldung,
-statt beim Rendern stehen zu bleiben. Kann ein Rechner nur HD codieren, verschwindet die
-4K-Auswahl. Auswahl, Vorschau und Layout speichern/laden funktionieren in jedem Browser.
+**Browser:** Die Anwendung prüft beim Laden mit einer echten Encoder-Abfrage, was der
+Browser kann, und wählt danach:
 
-Zum Rendern nutzt die Anwendung
+* **Chrome / Edge** – WebCodecs mit Hardware-Encoder, 4K in Sekunden.
+* **Firefox / Safari** – dort fehlt ein H.264-Encoder (Patentgründe). Deshalb liegt ein
+  Software-Encoder als WebAssembly bei ([app/vendor/h264-mp4-encoder.web.js](app/vendor/h264-mp4-encoder.web.js),
+  minih264 + MP4-Muxer, MIT, 1,6 MB, wird nur bei Bedarf geladen). Die Bilder kommen
+  über ein `<video>`-Element, der Text wird per Canvas eingebrannt. Ausgabe ist echtes
+  H.264 (Baseline) in **HD**; gemessen rund **2 Minuten für 32 Sekunden Material**,
+  die 4K-Auswahl entfällt in diesem Modus.
+* Kann ein Rechner nur HD codieren, verschwindet die 4K-Auswahl ebenfalls.
+
+Erzwingen lässt sich der Software-Weg mit `?render=wasm`.
+
+Zum Rendern mit WebCodecs nutzt die Anwendung
 [app/vendor/mp4box.all.min.js](app/vendor/mp4box.all.min.js) zum Demuxen sowie
 [app/vendor/mp4-muxer.min.js](app/vendor/mp4-muxer.min.js) zum Schreiben der MP4 (beide
 MIT-Lizenz, mitgeliefert). Größe, Laufweite, Position und Bewegung der Inserts liegen

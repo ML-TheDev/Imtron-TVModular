@@ -1121,6 +1121,7 @@
       items,
       width: size.width,
       height: size.height,
+      mode: renderMode,
       cancelled: () => cancelRender,
       onProgress: p => {
         if (p.phase === 'fallback') {
@@ -1144,7 +1145,8 @@
     setTimeout(() => URL.revokeObjectURL(url), 30000);
 
     return {
-      name, size: out.blob.size, mode: 'webcodecs',
+      name, size: out.blob.size,
+      mode: renderMode === 'wasm' ? 'h.264 software' : 'webcodecs',
       inserts: items.filter(i => i.text).length,
       resolution: out.width + 'x' + out.height,
       place: 'IM DOWNLOAD-ORDNER' + hinweis
@@ -1170,7 +1172,9 @@
 
     exportBtn.disabled = true;
     note('');
-    showModal(server ? 'FFMPEG · LOKAL' : 'WEBCODECS · IM BROWSER');
+    showModal(server ? 'FFMPEG · LOKAL'
+           : renderMode === 'wasm' ? 'H.264 SOFTWARE · IM BROWSER'
+           : 'WEBCODECS · IM BROWSER');
 
     try {
       const out = server ? await exportViaServer(line, size) : await exportViaBrowser(line, size);
@@ -1384,6 +1388,7 @@
      (schneller, kann verlustfrei kopieren) – sonst im Browser. */
   let serverRender = false;
   let maxRenderWidth = 3840;
+  let renderMode = 'native';
 
   async function announceEngine() {
     if (serverRender) {
@@ -1404,29 +1409,41 @@
     }
 
     maxRenderWidth = check.maxWidth;
+    renderMode     = check.mode || 'native';
 
-    /* Kann der Rechner nur HD, die 4K-Wahl entfernen */
+    /* Geht nur HD, die 4K-Wahl entfernen */
     if (maxRenderWidth < 3840) {
       const uhd = resSelect.querySelector('option[value="3840x2160"]');
       if (uhd) uhd.remove();
       resSelect.value = '1920x1080';
-      note('RENDERT IM BROWSER (WEBCODECS · MAXIMAL HD)');
-    } else {
-      note('RENDERT IM BROWSER (WEBCODECS)');
     }
+
+    note(renderMode === 'wasm'
+      ? 'RENDERT IM BROWSER (H.264 SOFTWARE · HD · DAUERT EINIGE MINUTEN)'
+      : 'RENDERT IM BROWSER (WEBCODECS' + (maxRenderWidth < 3840 ? ' · MAXIMAL HD' : '') + ')');
   }
 
-  /* ?render=browser bzw. ?render=server erzwingt eine Variante */
+  /* ?render=server | browser | wasm erzwingt eine Variante */
   const forcedEngine = new URLSearchParams(location.search).get('render');
 
   fetch('/api/status')
     .then(r => r.json())
     .then(s => { serverRender = !!(s && s.ffmpeg); })
     .catch(() => { serverRender = false; })
-    .then(() => {
-      if (forcedEngine === 'browser') serverRender = false;
+    .then(async () => {
+      if (forcedEngine === 'browser' || forcedEngine === 'wasm') serverRender = false;
       if (forcedEngine === 'server')  serverRender = true;
-      announceEngine();
+
+      await announceEngine();
+
+      if (forcedEngine === 'wasm' && !serverRender) {
+        renderMode = 'wasm';
+        maxRenderWidth = 1920;
+        const uhd = resSelect.querySelector('option[value="3840x2160"]');
+        if (uhd) uhd.remove();
+        resSelect.value = '1920x1080';
+        note('RENDERT IM BROWSER (H.264 SOFTWARE · HD · DAUERT EINIGE MINUTEN)');
+      }
     });
 
   /* ---------- Kopfzeile / Fußzeile ---------- */

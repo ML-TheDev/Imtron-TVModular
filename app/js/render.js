@@ -157,25 +157,32 @@ window.PeaqRender = (function () {
     return null;
   }
 
-  /* Vorab klären, ob dieser Browser wirklich H.264 codieren kann.
-     Firefox hat die WebCodecs-Schnittstellen, aber keinen H.264-Encoder –
-     ohne diese Prüfung würde ein Export dort einfach stehen bleiben. */
+  /* Vorab klären, wie dieser Browser H.264 schreiben kann:
+     "native"  = WebCodecs-Encoder mit Hardware (Chrome, Edge)
+     "wasm"    = mitgelieferter Software-Encoder (Firefox, Safari)          */
   async function probe() {
-    if (!supported()) {
-      return { ok: false, reason: 'WebCodecs fehlt in diesem Browser' };
+    const nativeReady =
+      typeof window.VideoEncoder === 'function' &&
+      typeof window.VideoDecoder === 'function' &&
+      typeof window.MP4Box === 'object' &&
+      typeof window.Mp4Muxer === 'object';
+
+    if (nativeReady) {
+      try {
+        const uhd = await pickCodec(3840, 2160, Math.round(3840 * 2160 * CONST.FPS * 0.15));
+        if (uhd) return { ok: true, mode: 'native', codec: uhd.codec, maxWidth: 3840 };
+
+        const hd = await pickCodec(1920, 1080, Math.round(1920 * 1080 * CONST.FPS * 0.15));
+        if (hd) return { ok: true, mode: 'native', codec: hd.codec, maxWidth: 1920 };
+      } catch (e) { /* weiter zum Software-Encoder */ }
     }
 
-    try {
-      const uhd = await pickCodec(3840, 2160, Math.round(3840 * 2160 * CONST.FPS * 0.15));
-      if (uhd) return { ok: true, codec: uhd.codec, maxWidth: 3840 };
-
-      const hd = await pickCodec(1920, 1080, Math.round(1920 * 1080 * CONST.FPS * 0.15));
-      if (hd) return { ok: true, codec: hd.codec, maxWidth: 1920 };
-
-      return { ok: false, reason: 'kein H.264-Encoder in diesem Browser' };
-    } catch (e) {
-      return { ok: false, reason: String(e && e.message || e) };
+    /* Software-Encoder braucht nur Canvas und ein <video> zum Auslesen */
+    if (typeof document.createElement('canvas').getContext === 'function') {
+      return { ok: true, mode: 'wasm', codec: 'avc1 (Software)', maxWidth: 1920 };
     }
+
+    return { ok: false, reason: 'dieser Browser kann kein Video schreiben' };
   }
 
   /* ---------- Demuxen mit mp4box ---------- */
@@ -259,11 +266,126 @@ window.PeaqRender = (function () {
   tickChannel.port1.onmessage = () => { const fn = tickQueue.shift(); if (fn) fn(); };
   const tick = () => new Promise(resolve => { tickQueue.push(resolve); tickChannel.port2.postMessage(0); });
 
+  /* ---------- Rendern mit Software-Encoder (ohne WebCodecs) ---------- */
+
+  let hmeLoading = null;
+
+  function loadHME() {
+    if (typeof window.HME !== 'undefined') return Promise.resolve(window.HME);
+    if (hmeLoading) return hmeLoading;
+
+    hmeLoading = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'vendor/h264-mp4-encoder.web.js';
+      s.onload  = () => resolve(window.HME);
+      s.onerror = () => reject(new Error('Software-Encoder nicht ladbar'));
+      document.head.appendChild(s);
+    });
+    return hmeLoading;
+  }
+
+  /* Bilder über ein <video>-Element holen – funktioniert in jedem Browser */
+  function openVideo(src) {
+    return new Promise((resolve, reject) => {
+      const v = document.createElement('video');
+      v.preload = 'auto';
+      v.muted = true;
+      v.playsInline = true;
+      v.addEventListener('loadeddata', () => resolve(v), { once: true });
+      v.addEventListener('error', () => reject(new Error('Video nicht ladbar')), { once: true });
+      v.src = src;
+    });
+  }
+
+  const seekTo = (v, t) => new Promise(resolve => {
+    v.addEventListener('seeked', resolve, { once: true });
+    v.currentTime = t;
+  });
+
+  async function renderWasm(opts) {
+    const items  = opts.items || [];
+    const W      = opts.width;
+    const H      = opts.height;
+    const report = opts.onProgress || function () {};
+    const stopped = () => opts.cancelled && opts.cancelled();
+
+    const HMElib = await loadHME();
+    const enc = await HMElib.createH264MP4Encoder();
+    enc.width  = W;
+    enc.height = H;
+    enc.frameRate = CONST.FPS;
+    enc.quantizationParameter = 22;      // Qualität (klein = besser)
+    enc.speed = 5;                       // 0 langsam/gut … 10 schnell
+    enc.groupOfPictures = CONST.FPS;
+    enc.initialize();
+
+    console.info('[PEAQ] Software-Render', W + '×' + H, items.length + ' Module');
+
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d', { alpha: false, willReadFrequently: true });
+
+    const totalFrames = items.reduce((s, it) => s + Math.round((it.duration || 4) * CONST.FPS), 0);
+    let done = 0;
+
+    try {
+      for (let m = 0; m < items.length; m++) {
+        if (stopped()) throw new Error('abgebrochen');
+
+        const item = items[m];
+        report({ phase: 'load', module: m + 1, modules: items.length,
+                 percent: done / totalFrames * 100 });
+
+        const video = await openVideo(item.src);
+        const dur   = item.duration || video.duration || 4;
+        const count = Math.round(dur * CONST.FPS);
+
+        for (let i = 0; i < count; i++) {
+          if (stopped()) { video.src = ''; throw new Error('abgebrochen'); }
+
+          const t = Math.min(Math.max(0, dur - 0.001), (i + 0.5) / CONST.FPS);
+          await seekTo(video, t);
+
+          ctx.drawImage(video, 0, 0, W, H);
+          drawInsert(ctx, { text: item.text, align: item.align, width: W, height: H,
+                            time: i / CONST.FPS, duration: dur });
+
+          enc.addFrameRgba(ctx.getImageData(0, 0, W, H).data);
+          done++;
+
+          if (i % 5 === 0 || i === count - 1) {
+            report({ phase: 'encode', module: m + 1, modules: items.length,
+                     frames: done, totalFrames, percent: done / totalFrames * 100 });
+          }
+
+          /* nach jedem Bild abgeben, damit die Seite bedienbar bleibt */
+          await tick();
+        }
+
+        video.src = '';
+      }
+
+      report({ phase: 'finish', percent: 99 });
+      enc.finalize();
+      const bytes = enc.FS.readFile(enc.outputFilename);
+      const blob  = new Blob([bytes], { type: 'video/mp4' });
+      enc.delete();
+
+      report({ phase: 'done', percent: 100 });
+      return { blob, width: W, height: H, codec: 'avc1 (Software)' };
+
+    } catch (err) {
+      try { enc.delete(); } catch (e) { /* egal */ }
+      throw err;
+    }
+  }
+
   /* ---------- Rendern ---------- */
 
   /* items: [{ src, text, align, duration }]  ->  Blob (video/mp4) */
   async function render(opts) {
-    if (!supported()) throw new Error('Dieser Browser kann nicht rendern (WebCodecs fehlt)');
+    /* Ohne WebCodecs-Encoder (z. B. Firefox) über den Software-Encoder */
+    if (opts.mode === 'wasm' || !supported()) return renderWasm(opts);
 
     const items   = opts.items || [];
     const W       = opts.width;
