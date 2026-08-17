@@ -32,6 +32,22 @@ Passwort: **PEAQtv57** (in [app/js/config.js](app/js/config.js) änderbar).
 
 Die Videos werden direkt aus `Footage/Modul Videos/` gelesen – nichts wird kopiert.
 
+## Fernseher-Auswahl
+
+Oben rechts, links neben „MODULAUSWAHL", steht ein schwarzer Knopf mit der
+Gerätebezeichnung und einem grauen Pfeil. Er öffnet eine Liste – derzeit mit einem
+Gerät: **PTV 43GQU-5026T 43D3200U+P20**. Weitere Fernseher einfach in
+[app/js/config.js](app/js/config.js) unter `tvs` ergänzen:
+
+```js
+tvs: [
+  { id: 'ptv-43gqu-5026t', name: 'PTV 43GQU-5026T 43D3200U+P20' },
+  { id: 'ptv-55xyz',       name: 'PTV 55XYZ-…' }
+]
+```
+
+Die Wahl wird gespeichert und im Layout-JSON als `fernseher` mitgeschrieben.
+
 ## Bedienung
 
 * **Ziehen** – Modul horizontal an eine andere Stelle schieben. Sobald die Mitte eines anderen Moduls überschritten wird, rutscht dieses weich zur Seite und gibt den Platz frei. Der Modulname gehört zum Video (Nummer aus dem Dateinamen) und wandert beim Verschieben mit.

@@ -13,6 +13,11 @@ const CONFIG = {
   /* Zugangspasswort (rein clientseitig – siehe README) */
   password: 'PEAQtv57',
 
+  /* Fernseher-Auswahl oben rechts. Weitere Geräte einfach ergänzen. */
+  tvs: [
+    { id: 'ptv-43gqu-5026t', name: 'PTV 43GQU-5026T 43D3200U+P20' }
+  ],
+
   /* Rückfall-Bibliothek (Stand: 17.08.2026) */
   library: [
     { id: '1-modul-intro-variante1',   label: 'INTRO VARIANTE1',   group: 1, src: '../Footage/Modul Videos/1 - Modul - Intro Variante1.mp4' },

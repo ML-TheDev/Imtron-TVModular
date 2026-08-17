@@ -52,12 +52,88 @@ body {
   user-select: none;
 }
 
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+}
+
 /* Versalhöhe entspricht der Versalhöhe des PEAQ-Logos (Logo 45px hoch) */
 .topbar-label {
   font-size: 48px;
   line-height: 1;
   letter-spacing: .06em;
   white-space: nowrap;
+}
+
+/* Fernseher-Auswahl */
+
+.tv-picker { position: relative; }
+
+.tv-button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: .14em;
+  color: #f2f1ee;
+  background: #000;
+  border: none;
+  border-radius: 4px;
+  padding: 13px 16px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .2s ease;
+}
+
+.tv-button:hover { background: #1c1c1c; }
+
+.tv-arrow {
+  font-size: 11px;
+  line-height: 1;
+  color: rgba(242, 241, 238, .45);
+  transition: transform .2s ease;
+}
+
+.tv-picker.is-open .tv-arrow { transform: rotate(180deg); }
+
+.tv-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 50;
+  min-width: 100%;
+  background: #000;
+  border-radius: 4px;
+  padding: 5px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .28);
+}
+
+.tv-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: .12em;
+  color: rgba(242, 241, 238, .6);
+  background: none;
+  border: none;
+  border-radius: 3px;
+  padding: 9px 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tv-menu button:hover     { color: #f2f1ee; background: #1c1c1c; }
+.tv-menu button.is-active { color: #f2f1ee; background: #2b2b2b; }
+
+.tv-menu-hint {
+  padding: 7px 11px 5px;
+  font-size: 9px;
+  letter-spacing: .14em;
+  color: rgba(242, 241, 238, .3);
 }
 
 /* ---------------- Login ---------------- */

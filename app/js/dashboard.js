@@ -1167,6 +1167,63 @@
 
   exportBtn.addEventListener('click', runExport);
 
+  /* ---------- Fernseher-Auswahl ---------- */
+
+  const TV_KEY   = 'peaq-fernseher';
+  const tvButton = document.getElementById('tvButton');
+  const tvMenu   = document.getElementById('tvMenu');
+  const tvName   = document.getElementById('tvName');
+  const tvPicker = document.querySelector('.tv-picker');
+
+  const tvList = (CONFIG.tvs && CONFIG.tvs.length)
+    ? CONFIG.tvs
+    : [{ id: 'unbekannt', name: 'KEIN GERÄT HINTERLEGT' }];
+
+  let currentTv = tvList.find(t => t.id === localStorage.getItem(TV_KEY)) || tvList[0];
+
+  function renderTv() {
+    tvName.textContent = currentTv.name;
+
+    tvMenu.innerHTML = '';
+    tvList.forEach(tv => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = tv.name;
+      if (tv.id === currentTv.id) b.classList.add('is-active');
+      b.addEventListener('click', () => {
+        currentTv = tv;
+        try { localStorage.setItem(TV_KEY, tv.id); } catch (e) { /* egal */ }
+        closeTvMenu();
+        renderTv();
+      });
+      tvMenu.appendChild(b);
+    });
+
+    if (tvList.length < 2) {
+      const hint = document.createElement('div');
+      hint.className = 'tv-menu-hint';
+      hint.textContent = 'WEITERE GERÄTE FOLGEN';
+      tvMenu.appendChild(hint);
+    }
+  }
+
+  function closeTvMenu() {
+    tvMenu.hidden = true;
+    tvPicker.classList.remove('is-open');
+    tvButton.setAttribute('aria-expanded', 'false');
+  }
+
+  tvButton.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = tvMenu.hidden;
+    tvMenu.hidden = !open;
+    tvPicker.classList.toggle('is-open', open);
+    tvButton.setAttribute('aria-expanded', String(open));
+    if (open) setTimeout(() => document.addEventListener('click', closeTvMenu, { once: true }), 0);
+  });
+
+  renderTv();
+
   /* ---------- Layout speichern (Ordner wählen) ---------- */
 
   function layoutData() {
@@ -1174,6 +1231,7 @@
     return {
       app: 'PEAQ Modul-Konfigurator',
       gespeichert: new Date().toISOString(),
+      fernseher: currentTv.name,
       gesamtlaenge: fmt(totalDuration()),
       module: state.map((m, i) => {
         const clip = getClip(m.clip);
@@ -1258,6 +1316,14 @@
     });
 
     if (!next.length) throw new Error('Kein Video der Datei gefunden');
+
+    /* Fernseher übernehmen, wenn er bekannt ist */
+    const tv = tvList.find(t => t.name === data.fernseher);
+    if (tv) {
+      currentTv = tv;
+      try { localStorage.setItem(TV_KEY, tv.id); } catch (e) { /* egal */ }
+      renderTv();
+    }
 
     state   = next;
     current = -1;
