@@ -72,7 +72,7 @@ Randabstand).
 * Schriftgröße = Bildbreite ÷ 13, Laufweite −0,03 em, Textmitte auf 57 % der Bildhöhe (knapp unter der Bildmitte).
 * Bewegung: schnell von unten herein und weich auslaufend, danach ohne Stillstand langsam weiter nach oben gleitend, zum Schluss beschleunigt nach oben hinaus mit Ausblendung.
 * Die **Buchstaben blenden nacheinander ein**, jeder mit vertikaler Richtungsunschärfe (20 % der Schriftgröße) und Gauß-Unschärfe (10 %), die beim Erscheinen auslaufen. Der Versatz zwischen den Buchstaben passt sich der Textlänge an, damit alle innerhalb der Einfahrzeit stehen.
-* Schlagschatten: 40 % Deckkraft, weich (Radius 55 % der Schriftgröße).
+* Schlagschatten: 40 % Deckkraft, weich (Radius 55 % der Schriftgröße). Während der Unschärfephase wird er weggelassen und erst mit dem scharfen Durchgang eingeblendet – sonst verschmiert und addiert er sich über die Einzelkopien der Richtungsunschärfe.
 
 Die Eingaben werden gespeichert und beim Export eingebrannt.
 
