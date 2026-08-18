@@ -57,6 +57,7 @@ Die Wahl wird gespeichert und im Layout-JSON als `fernseher` mitgeschrieben.
 * **Doppelklick auf das Vorschaubild** – Auswahlmenü mit allen Clips der Bibliothek plus „EIGENES VIDEO …" (Datei vom Rechner)
 * **Abspielstrich** – wandert live über die Modulkästchen; das gerade laufende Modul wird aufgehellt und hervorgehoben
 * **Zeitanzeige** – aktuelle Position / Gesamtlänge aller aktiven Module
+* **Blenden-Kreis in der Lücke** – erscheint über **TRANSITIONS** und wählt die Blende zum nächsten Modul
 * **Tastatur** – Leertaste = Play/Pause, ←/→ = 2 Sekunden springen
 * Reihenfolge und Auswahl werden im Browser gespeichert; **ZURÜCKSETZEN** stellt den Ausgangszustand her.
 
@@ -91,6 +92,27 @@ den Text dort in OCR-A auf ein transparentes PNG und ffmpeg legt es per `overlay
 animierter Position und Alpha-Blende ins Bild – ohne `drawtext`/freetype, das der hier
 vorhandene ffmpeg-Build nicht mitbringt. Die Buchstaben-Einblendung entsteht auf diesem
 Weg allerdings nicht, deshalb rendert die Anwendung mit Inserts im Browser.
+
+## Blenden (Transitions)
+
+Neben **⊕ TEXT INSERTS** liegt **⊕ TRANSITIONS**. Ein Klick zeigt in jeder Lücke der
+Modulleiste einen schwarzen Kreis; ein Klick darauf öffnet die Auswahl. Der Kreis trägt
+danach das Kürzel der gewählten Blende und ist hell hinterlegt.
+
+| Blende | Wirkung |
+| --- | --- |
+| **SCHWARZBLENDE** | Video 1 blendet nach Schwarz, Video 2 aus Schwarz herein |
+| **LICHTLEAK** | vertikale Richtungsunschärfe mit hellem Streifen, der durchs Bild zieht – wie Licht durch eine Glasscheibe |
+| **SOFT PUSH** | weiches Heranfahren mit auslaufender Unschärfe und leichter Aufhellung, ohne Formen |
+
+Jede Blende dauert **0,6 s** und **verbraucht keine zusätzliche Zeit**: Sie liegt über den
+letzten 0,3 s des einen und den ersten 0,3 s des nächsten Moduls, die Gesamtlänge bleibt
+unverändert. Die Blende gehört zum Modul davor und wandert beim Verschieben mit; sie
+steht im Layout-JSON als `blende_danach`. Werte und Kurven stehen in
+[app/js/render.js](app/js/render.js) unter `TRANSITIONS` und `CONST.TRANS*`.
+
+Wie bei den Text-Inserts gilt: Sobald eine Blende gesetzt ist, rendert die Anwendung im
+Browser – der ffmpeg-Weg mit statischem Overlay kann die Effekte nicht erzeugen.
 
 ## Layout speichern und laden
 

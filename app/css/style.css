@@ -560,10 +560,10 @@ body {
 
 /* --- Text-Inserts --- */
 
-.inserts-wrap {
+.tool-row {
   display: flex;
-  flex-direction: column;
-  gap: 14px;
+  align-items: center;
+  gap: 30px;
 }
 
 .inserts-toggle {
@@ -580,7 +580,7 @@ body {
 }
 
 .inserts-toggle:hover,
-.inserts-wrap.is-open .inserts-toggle { opacity: 1; }
+.inserts-toggle.is-open { opacity: 1; }
 
 .inserts-plus {
   display: flex;
@@ -596,7 +596,7 @@ body {
   transition: transform .25s ease;
 }
 
-.inserts-wrap.is-open .inserts-plus { transform: rotate(45deg); }
+.inserts-toggle.is-open .inserts-plus { transform: rotate(45deg); }
 
 .inserts-label {
   font-family: var(--ui-font);
@@ -681,6 +681,44 @@ body {
 
 .insert-align button:hover     { color: #f2f1ee; background: #1c1c1c; }
 .insert-align button.is-active { color: #f2f1ee; background: #2b2b2b; }
+
+/* Blenden zwischen den Modulen */
+
+.trans-dot {
+  position: absolute;
+  z-index: 25;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;
+  border-radius: 50%;
+  background: #000;
+  color: #f2f1ee;
+  font-family: var(--ui-font);
+  font-weight: 600;
+  font-size: 11px;
+  line-height: 1;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .3);
+  transition: transform .15s ease, background .2s ease;
+}
+
+.strip.show-trans .trans-dot { display: flex; }
+
+.trans-dot:hover      { transform: scale(1.12); background: #1c1c1c; }
+.trans-dot.is-set     { background: #f2f1ee; color: #000; }
+
+/* Schleier der Blende in der Vorschau */
+.trans-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  opacity: 0;
+}
 
 /* Text-Inserts über dem Video: gezeichnet wie im Export (js/render.js),
    Lage und Größe setzt das Skript passend zum Bildbereich. */

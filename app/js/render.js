@@ -28,8 +28,117 @@ window.PeaqRender = (function () {
     CHAR_GAP:   0.05,    // Versatz zwischen den Buchstaben
     CHAR_GAUSS: 0.10,    // Gauß-Unschärfe beim Einblenden, Anteil der Schriftgröße
     CHAR_SMEAR: 0.20,    // Richtungsunschärfe vertikal, Anteil der Schriftgröße
+    TRANS:      0.60,    // Dauer einer Blende
+    TRANS_HALF: 0.30,    // davon je Seite des Schnitts
     FPS:        25
   };
+
+  /* Auswählbare Blenden. Sie verbrauchen keine zusätzliche Zeit, sondern
+     liegen über den letzten 0,3 s des einen und den ersten 0,3 s des
+     nächsten Moduls. */
+  const TRANSITIONS = [
+    { id: 'black',  label: 'SCHWARZBLENDE', kurz: 'S' },
+    { id: 'leak',   label: 'LICHTLEAK',     kurz: 'L' },
+    { id: 'smooth', label: 'SOFT PUSH',     kurz: 'P' }
+  ];
+
+  const smoothstep = p => p * p * (3 - 2 * p);
+
+  /* Wirkung der Blende für ein Bild:
+     { type, side, s } mit s = 0 (weit weg) bis 1 (direkt am Schnitt) */
+  function transitionAt(time, dur, transOut, transIn) {
+    const half = CONST.TRANS_HALF;
+
+    if (transIn && transIn !== 'none' && time < half) {
+      return { type: transIn, side: 'in', s: smoothstep(Math.max(0, 1 - time / half)) };
+    }
+    if (transOut && transOut !== 'none' && time > (dur || 4) - half) {
+      return { type: transOut, side: 'out', s: smoothstep(Math.max(0, 1 - ((dur || 4) - time) / half)) };
+    }
+    return null;
+  }
+
+  /* Bild zeichnen – mit den Verzerrungen der Blende (vor den Text-Inserts) */
+  function drawFrame(ctx, frame, W, H, tr) {
+    if (!tr || tr.s <= 0.002) { ctx.drawImage(frame, 0, 0, W, H); return; }
+
+    if (tr.type === 'smooth') {
+      /* weicher Schub: leichtes Heranfahren mit auslaufender Unschärfe */
+      const zoom = 1 + 0.055 * tr.s;
+      const blur = tr.s * W * 0.005;
+      const w = W * zoom, h = H * zoom;
+      ctx.filter = blur > 0.4 ? 'blur(' + blur.toFixed(2) + 'px)' : 'none';
+      ctx.drawImage(frame, (W - w) / 2, (H - h) / 2, w, h);
+      ctx.filter = 'none';
+      return;
+    }
+
+    if (tr.type === 'leak') {
+      /* Richtungsunschärfe vertikal, wie Licht durch eine Glasscheibe */
+      const smear = tr.s * H * 0.055;
+      const blur  = tr.s * W * 0.003;
+      ctx.filter = blur > 0.4 ? 'blur(' + blur.toFixed(2) + 'px)' : 'none';
+
+      if (smear > 1.5) {
+        const steps = 6;
+        ctx.globalAlpha = 1 / steps * 1.7;
+        for (let i = 0; i < steps; i++) {
+          ctx.drawImage(frame, 0, (i / (steps - 1) - 0.5) * smear, W, H);
+        }
+        ctx.globalAlpha = 1;
+      } else {
+        ctx.drawImage(frame, 0, 0, W, H);
+      }
+      ctx.filter = 'none';
+      return;
+    }
+
+    ctx.drawImage(frame, 0, 0, W, H);       // black: nur der Schleier danach
+  }
+
+  /* Schleier der Blende – nach den Text-Inserts, damit auch sie erfasst werden */
+  function paintTransition(ctx, W, H, tr) {
+    if (!tr || tr.s <= 0.002) return;
+
+    if (tr.type === 'black') {
+      ctx.globalAlpha = tr.s;
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = 1;
+      return;
+    }
+
+    if (tr.type === 'smooth') {
+      ctx.globalAlpha = 0.16 * tr.s;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = 1;
+      return;
+    }
+
+    if (tr.type === 'leak') {
+      /* heller Streifen zieht zum Schnitt hin durchs Bild */
+      const pos = tr.side === 'out' ? (-0.25 + 1.5 * tr.s) : (1.25 - 1.5 * tr.s);
+      const cx  = pos * W;
+      const g = ctx.createLinearGradient(cx - W * 0.42, H * 0.9, cx + W * 0.42, H * 0.1);
+      g.addColorStop(0.00, 'rgba(255,255,255,0)');
+      g.addColorStop(0.42, 'rgba(255,246,226,' + (0.42 * tr.s).toFixed(3) + ')');
+      g.addColorStop(0.52, 'rgba(255,255,255,' + (0.72 * tr.s).toFixed(3) + ')');
+      g.addColorStop(0.62, 'rgba(226,240,255,' + (0.34 * tr.s).toFixed(3) + ')');
+      g.addColorStop(1.00, 'rgba(255,255,255,0)');
+
+      ctx.globalCompositeOperation = 'screen';
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalCompositeOperation = 'source-over';
+
+      /* leichte Grundaufhellung */
+      ctx.globalAlpha = 0.10 * tr.s;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = 1;
+    }
+  }
 
   /* Ab 15 Zeichen zweizeilig – möglichst am letzten Wortende davor */
   function textLines(text) {
@@ -510,9 +619,13 @@ window.PeaqRender = (function () {
           const t = Math.min(Math.max(0, dur - 0.001), (i + 0.5) / CONST.FPS);
           await seekTo(video, t);
 
-          ctx.drawImage(video, 0, 0, W, H);
+          const tLocal = i / CONST.FPS;
+          const tr = transitionAt(tLocal, dur, item.transOut, item.transIn);
+
+          drawFrame(ctx, video, W, H, tr);
           drawInsert(ctx, { text: item.text, align: item.align, width: W, height: H,
-                            time: i / CONST.FPS, duration: dur });
+                            time: tLocal, duration: dur });
+          paintTransition(ctx, W, H, tr);
 
           enc.addFrameRgba(ctx.getImageData(0, 0, W, H).data);
           done++;
@@ -666,11 +779,15 @@ window.PeaqRender = (function () {
             const frame = pending.shift();
             const tLocal = frame.timestamp / 1e6;
 
-            ctx.drawImage(frame, 0, 0, outW, outH);
+            const tr = transitionAt(tLocal, dur, item.transOut, item.transIn);
+
+            drawFrame(ctx, frame, outW, outH, tr);
             frame.close();
 
             drawInsert(ctx, { text: item.text, align: item.align, width: outW, height: outH,
                               time: tLocal, duration: dur });
+
+            paintTransition(ctx, outW, outH, tr);
 
             const out = new VideoFrame(canvas, { timestamp: globalUs, duration: frameDur });
             encoder.encode(out, { keyFrame: firstOfModule });
@@ -740,6 +857,7 @@ window.PeaqRender = (function () {
     }
   }
 
-  return { CONST, textLines, insertMotion, drawInsert, insertPngDataUrl, supported, probe, render };
+  return { CONST, TRANSITIONS, textLines, insertMotion, transitionAt, drawFrame, paintTransition,
+           drawInsert, insertPngDataUrl, supported, probe, render };
 
 })();

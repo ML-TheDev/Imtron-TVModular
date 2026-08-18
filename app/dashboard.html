@@ -38,10 +38,14 @@
       </div>
     </section>
 
-    <section class="inserts-wrap">
+    <section class="tool-row">
       <button id="insertsToggle" class="inserts-toggle" type="button" aria-expanded="false">
         <span class="inserts-plus">+</span>
         <span class="inserts-label">TEXT INSERTS</span>
+      </button>
+      <button id="transToggle" class="inserts-toggle" type="button" aria-expanded="false">
+        <span class="inserts-plus">+</span>
+        <span class="inserts-label">TRANSITIONS</span>
       </button>
     </section>
 
@@ -54,6 +58,7 @@
       <div id="stage" class="player-stage">
         <video id="player" playsinline preload="auto"></video>
         <canvas id="insertCanvas" class="insert-overlay"></canvas>
+        <div id="transLayer" class="trans-layer"></div>
         <div class="player-empty">KEIN AKTIVES MODUL</div>
       </div>
 

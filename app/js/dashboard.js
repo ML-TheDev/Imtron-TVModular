@@ -29,8 +29,9 @@
 
   const stripScroll  = document.getElementById('stripScroll');
   const stripThumb   = document.getElementById('stripThumb');
-  const insertsWrap  = document.querySelector('.inserts-wrap');
   const insertsTgl   = document.getElementById('insertsToggle');
+  const transTgl     = document.getElementById('transToggle');
+  const transLayer   = document.getElementById('transLayer');
   const insertCanvas = document.getElementById('insertCanvas');
   const insertCtx    = insertCanvas.getContext('2d');
   const layoutBtn    = document.getElementById('layoutBtn');
@@ -93,12 +94,17 @@
 
   const cleanText  = t => String(t || '').slice(0, MAX_TEXT);
 
+  const TRANS_LIST = (window.PeaqRender && PeaqRender.TRANSITIONS) || [];
+  const cleanTrans = t => TRANS_LIST.some(x => x.id === t) ? t : 'none';
+  const transLabel = t => (TRANS_LIST.find(x => x.id === t) || {}).label || 'OHNE';
+  const transKurz  = t => (TRANS_LIST.find(x => x.id === t) || {}).kurz || '+';
+
   /* Ab 15 Zeichen zweizeilig (Logik in js/render.js) */
   const textLines = t => window.PeaqRender ? PeaqRender.textLines(t) : [String(t || '')];
   const cleanAlign = a => (a === 'left' || a === 'right') ? a : 'center';
 
   function loadState() {
-    const fallback = () => defaults.map(m => ({ clip: m.clip, enabled: true, text: '', align: 'center' }));
+    const fallback = () => defaults.map(m => ({ clip: m.clip, enabled: true, text: '', align: 'center', trans: 'none' }));
 
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
@@ -110,7 +116,8 @@
           clip: s.clip,
           enabled: s.enabled !== false,
           text: cleanText(s.text),
-          align: cleanAlign(s.align)
+          align: cleanAlign(s.align),
+          trans: cleanTrans(s.trans)
         }));
 
       return restored.length ? restored : fallback();
@@ -122,7 +129,8 @@
   function saveState() {
     const plain = state
       .filter(m => { const c = getClip(m.clip); return c && !c.custom; })
-      .map(m => ({ clip: m.clip, enabled: m.enabled, text: m.text || '', align: m.align || 'center' }));
+      .map(m => ({ clip: m.clip, enabled: m.enabled, text: m.text || '', align: m.align || 'center',
+                   trans: m.trans || 'none' }));
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(plain)); } catch (e) { /* egal */ }
   }
 
@@ -252,9 +260,99 @@
     });
 
     strip.appendChild(playhead);
+    buildTransDots();
     buildInserts();
     renderSources();
   }
+
+  /* ---------- Blenden zwischen den Modulen ---------- */
+
+  const transDots = [];
+
+  function buildTransDots() {
+    transDots.length = 0;
+
+    for (let i = 0; i < state.length - 1; i++) {
+      const dot = document.createElement('button');
+      dot.type = 'button';
+      dot.className = 'trans-dot';
+      dot.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openTransMenu(transDots.indexOf(dot), dot);
+      });
+      strip.appendChild(dot);
+      transDots.push(dot);
+    }
+  }
+
+  /* Lage und Beschriftung der Punkte – jeweils in der Lücke rechts des Moduls */
+  function renderTransDots() {
+    transDots.forEach((dot, i) => {
+      const card  = cards[i] && cards[i].card;
+      const frame = cards[i] && cards[i].frame;
+      if (!card || !frame) return;
+
+      const gap = parseFloat(getComputedStyle(strip).columnGap) || 12;
+      dot.style.left = Math.round(card.offsetLeft + card.offsetWidth + gap / 2) + 'px';
+      dot.style.top  = Math.round(card.offsetTop + frame.offsetTop + frame.offsetHeight / 2) + 'px';
+
+      const art = state[i].trans || 'none';
+      dot.textContent = transKurz(art);
+      dot.title = 'Blende nach ' + modName(i) + ': ' + transLabel(art);
+      dot.classList.toggle('is-set', art !== 'none');
+    });
+  }
+
+  function closeTransMenu() {
+    const m = document.getElementById('transMenu');
+    if (m) m.remove();
+  }
+
+  function openTransMenu(i, anchor) {
+    closeTransMenu();
+    if (i < 0) return;
+
+    const menu = document.createElement('div');
+    menu.className = 'swap-menu trans-menu';
+    menu.id = 'transMenu';
+
+    const eintrag = (id, label) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = label;
+      if ((state[i].trans || 'none') === id) b.classList.add('is-active');
+      b.addEventListener('click', () => {
+        state[i].trans = id;
+        saveState();
+        renderTransDots();
+        closeTransMenu();
+        updateProgress();
+      });
+      menu.appendChild(b);
+    };
+
+    eintrag('none', 'OHNE BLENDE');
+    menu.appendChild(document.createElement('hr'));
+    TRANS_LIST.forEach(t => eintrag(t.id, t.label));
+
+    document.body.appendChild(menu);
+
+    const r = anchor.getBoundingClientRect();
+    menu.style.top  = (r.bottom + window.scrollY + 8) + 'px';
+    menu.style.left = Math.max(12, Math.min(r.left + window.scrollX - 60,
+                        window.scrollX + window.innerWidth - menu.offsetWidth - 12)) + 'px';
+
+    setTimeout(() => document.addEventListener('click', closeTransMenu, { once: true }), 0);
+  }
+
+  transTgl.addEventListener('click', () => {
+    const open = !strip.classList.contains('show-trans');
+    strip.classList.toggle('show-trans', open);
+    transTgl.classList.toggle('is-open', open);
+    transTgl.setAttribute('aria-expanded', String(open));
+    if (!open) closeTransMenu();
+    renderTransDots();
+  });
 
   /* Ein schwarzes Textkästchen je Modul – es sitzt im Modulkästchen selbst,
      wird also beim Verschieben automatisch mitgenommen. */
@@ -331,7 +429,7 @@
   insertsTgl.addEventListener('click', () => {
     const open = !strip.classList.contains('show-inserts');
     strip.classList.toggle('show-inserts', open);
-    insertsWrap.classList.toggle('is-open', open);
+    insertsTgl.classList.toggle('is-open', open);
     insertsTgl.setAttribute('aria-expanded', String(open));
 
     if (open) {
@@ -430,6 +528,7 @@
     });
 
     renderInserts();
+    renderTransDots();
     renderStripScroll();
 
     const active = timeline().length;
@@ -602,6 +701,7 @@
        Die Textfelder stecken in den Kästchen und wandern automatisch mit. */
     cards.forEach(c => strip.appendChild(c.card));
     strip.appendChild(playhead);
+    transDots.forEach(d => strip.appendChild(d));
 
     current = runningMod ? state.indexOf(runningMod) : -1;
 
@@ -840,6 +940,64 @@
 
   player.addEventListener('loadedmetadata', positionOverlay);
 
+  /* Blende des laufenden Schnitts in der Vorschau zeigen. Die Verzerrung
+     liegt als CSS-Filter auf dem Video, der Schleier als Ebene darüber. */
+  function renderTransition(seg) {
+    const line = timeline();
+    const pos  = seg ? line.findIndex(x => x.index === seg.index) : -1;
+
+    let tr = null;
+    if (seg && pos >= 0 && window.PeaqRender) {
+      const transOut = pos < line.length - 1 ? state[seg.index].trans : 'none';
+      const transIn  = pos > 0 ? state[line[pos - 1].index].trans : 'none';
+      tr = PeaqRender.transitionAt(player.currentTime || 0, seg.duration || 4, transOut, transIn);
+    }
+
+    if (!tr || tr.s <= 0.002) {
+      player.style.filter = '';
+      player.style.transform = '';
+      transLayer.style.opacity = '0';
+      transLayer.style.background = 'none';
+      return;
+    }
+
+    const w = videoBox.w || stage.clientWidth;
+    const h = videoBox.h || stage.clientHeight;
+
+    transLayer.style.left   = insertCanvas.style.left;
+    transLayer.style.top    = insertCanvas.style.top;
+    transLayer.style.width  = w + 'px';
+    transLayer.style.height = h + 'px';
+    transLayer.style.mixBlendMode = 'normal';
+    transLayer.style.opacity = '1';
+
+    if (tr.type === 'black') {
+      player.style.filter = '';
+      player.style.transform = '';
+      transLayer.style.background = 'rgba(0,0,0,' + tr.s.toFixed(3) + ')';
+      return;
+    }
+
+    if (tr.type === 'smooth') {
+      player.style.filter = 'blur(' + (tr.s * w * 0.005).toFixed(2) + 'px)';
+      player.style.transform = 'scale(' + (1 + 0.055 * tr.s).toFixed(4) + ')';
+      transLayer.style.background = 'rgba(255,255,255,' + (0.16 * tr.s).toFixed(3) + ')';
+      return;
+    }
+
+    /* Lichtleak: vertikale Unschärfe plus heller Streifen quer durchs Bild */
+    player.style.filter = 'blur(' + (tr.s * w * 0.003).toFixed(2) + 'px)';
+    player.style.transform = 'scaleY(' + (1 + 0.02 * tr.s).toFixed(4) + ')';
+    const q = (tr.side === 'out' ? -25 + 150 * tr.s : 125 - 150 * tr.s);
+    transLayer.style.mixBlendMode = 'screen';
+    transLayer.style.background =
+      'linear-gradient(100deg, rgba(255,255,255,0) ' + (q - 42) + '%,' +
+      ' rgba(255,246,226,' + (0.42 * tr.s).toFixed(3) + ') ' + (q - 8) + '%,' +
+      ' rgba(255,255,255,' + (0.72 * tr.s).toFixed(3) + ') ' + q + '%,' +
+      ' rgba(226,240,255,' + (0.34 * tr.s).toFixed(3) + ') ' + (q + 10) + '%,' +
+      ' rgba(255,255,255,0) ' + (q + 42) + '%)';
+  }
+
   /* Insert des laufenden Moduls auf die Canvas zeichnen – exakt dieselbe
      Routine wie im Export, damit Vorschau und Datei gleich aussehen. */
   function renderOverlay() {
@@ -854,6 +1012,8 @@
 
     insertCtx.setTransform(1, 0, 0, 1, 0, 0);
     insertCtx.clearRect(0, 0, w, h);
+
+    renderTransition(seg);
 
     if (!seg || !window.PeaqRender) return;
 
@@ -1076,11 +1236,13 @@
 
   /* Rendern im Browser (WebCodecs) – funktioniert auch online ohne Server */
   async function exportViaBrowser(line, size) {
-    const items = line.map(seg => ({
+    const items = line.map((seg, k) => ({
       src: srcOf(state[seg.index]),
       text: state[seg.index].text || '',
       align: state[seg.index].align || 'center',
-      duration: seg.duration
+      duration: seg.duration,
+      transOut: k < line.length - 1 ? (state[seg.index].trans || 'none') : 'none',
+      transIn:  k > 0 ? (state[line[k - 1].index].trans || 'none') : 'none'
     }));
 
     let hinweis = '';
@@ -1136,7 +1298,9 @@
     /* Mit Text-Inserts rendert der Browser: nur dort blenden die Buchstaben
        nacheinander ein. Ohne Inserts nimmt der lokale ffmpeg den kürzeren
        Weg und kopiert verlustfrei. */
-    const hatInserts = line.some(seg => (state[seg.index].text || '').length > 0);
+    const hatInserts = line.some((seg, k) =>
+      (state[seg.index].text || '').length > 0 ||
+      (k < line.length - 1 && (state[seg.index].trans || 'none') !== 'none'));
     const browserMoeglich = window.PeaqRender && PeaqRender.supported() || renderMode === 'wasm';
     const server = serverRender && !(hatInserts && browserMoeglich) || forcedEngine === 'server';
 
@@ -1251,6 +1415,7 @@
           aktiv: m.enabled,
           text: m.text || '',
           ausrichtung: m.align || 'center',
+          blende_danach: m.trans || 'none',
           laenge: durOf(m) ? +durOf(m).toFixed(2) : null
         };
       }),
@@ -1319,7 +1484,8 @@
         clip: clip.id,
         enabled: entry.aktiv !== false,
         text: cleanText(entry.text),
-        align: cleanAlign(entry.ausrichtung)
+        align: cleanAlign(entry.ausrichtung),
+        trans: cleanTrans(entry.blende_danach)
       });
     });
 
