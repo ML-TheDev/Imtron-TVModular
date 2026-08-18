@@ -74,21 +74,31 @@ window.PeaqRender = (function () {
     }
 
     if (tr.type === 'leak') {
-      /* Richtungsunschärfe vertikal, wie Licht durch eine Glasscheibe */
-      const smear = tr.s * H * 0.055;
-      const blur  = tr.s * W * 0.003;
+      /* Diagonale Richtungsunschärfe mit leichter Scherung – wie Licht, das
+         durch eine Glasscheibe zieht. Beim neuen Video läuft die Verzerrung
+         in die andere Richtung wieder zurück. */
+      const dir   = tr.side === 'out' ? 1 : -1;
+      const smear = tr.s * H * 0.085;
+      const blur  = tr.s * W * 0.006;
+      const skew  = 0.035 * tr.s * dir;
+
+      ctx.save();
       ctx.filter = blur > 0.4 ? 'blur(' + blur.toFixed(2) + 'px)' : 'none';
+      ctx.transform(1, 0, skew, 1, -skew * H / 2, 0);          // Scherung um die Bildmitte
 
       if (smear > 1.5) {
-        const steps = 6;
-        ctx.globalAlpha = 1 / steps * 1.7;
+        const steps = 9;
+        ctx.globalAlpha = 1 / steps * 2.1;
         for (let i = 0; i < steps; i++) {
-          ctx.drawImage(frame, 0, (i / (steps - 1) - 0.5) * smear, W, H);
+          const k = (i / (steps - 1) - 0.5) * smear;
+          ctx.drawImage(frame, k * 0.75 * dir, k, W, H);       // diagonal
         }
-        ctx.globalAlpha = 1;
       } else {
         ctx.drawImage(frame, 0, 0, W, H);
       }
+
+      ctx.restore();
+      ctx.globalAlpha = 1;
       ctx.filter = 'none';
       return;
     }
@@ -117,26 +127,31 @@ window.PeaqRender = (function () {
     }
 
     if (tr.type === 'leak') {
-      /* heller Streifen zieht zum Schnitt hin durchs Bild */
-      const pos = tr.side === 'out' ? (-0.25 + 1.5 * tr.s) : (1.25 - 1.5 * tr.s);
-      const cx  = pos * W;
-      const g = ctx.createLinearGradient(cx - W * 0.42, H * 0.9, cx + W * 0.42, H * 0.1);
-      g.addColorStop(0.00, 'rgba(255,255,255,0)');
-      g.addColorStop(0.42, 'rgba(255,246,226,' + (0.42 * tr.s).toFixed(3) + ')');
-      g.addColorStop(0.52, 'rgba(255,255,255,' + (0.72 * tr.s).toFixed(3) + ')');
-      g.addColorStop(0.62, 'rgba(226,240,255,' + (0.34 * tr.s).toFixed(3) + ')');
-      g.addColorStop(1.00, 'rgba(255,255,255,0)');
-
+      const weich = Math.pow(tr.s, 1.4);
       ctx.globalCompositeOperation = 'screen';
+
+      /* breiter, weicher Streifen zieht diagonal durchs Bild */
+      const pos = tr.side === 'out' ? (-0.35 + 1.7 * tr.s) : (1.35 - 1.7 * tr.s);
+      const cx  = pos * W;
+      const g = ctx.createLinearGradient(cx - W * 0.9, H * 1.1, cx + W * 0.9, -H * 0.1);
+      g.addColorStop(0.00, 'rgba(255,255,255,0)');
+      g.addColorStop(0.28, 'rgba(255,244,220,' + (0.45 * tr.s).toFixed(3) + ')');
+      g.addColorStop(0.50, 'rgba(255,255,255,' + (0.85 * tr.s).toFixed(3) + ')');
+      g.addColorStop(0.72, 'rgba(224,238,255,' + (0.45 * tr.s).toFixed(3) + ')');
+      g.addColorStop(1.00, 'rgba(255,255,255,0)');
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, W, H);
-      ctx.globalCompositeOperation = 'source-over';
 
-      /* leichte Grundaufhellung */
-      ctx.globalAlpha = 0.10 * tr.s;
-      ctx.fillStyle = '#ffffff';
+      /* helle Blende, die zum Schnitt hin die ganze Mitte einhüllt */
+      const r = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.66);
+      r.addColorStop(0.00, 'rgba(255,253,246,' + (0.96 * weich).toFixed(3) + ')');
+      r.addColorStop(0.45, 'rgba(255,251,240,' + (0.80 * weich).toFixed(3) + ')');
+      r.addColorStop(0.78, 'rgba(255,255,255,' + (0.45 * weich).toFixed(3) + ')');
+      r.addColorStop(1.00, 'rgba(255,255,255,' + (0.18 * weich).toFixed(3) + ')');
+      ctx.fillStyle = r;
       ctx.fillRect(0, 0, W, H);
-      ctx.globalAlpha = 1;
+
+      ctx.globalCompositeOperation = 'source-over';
     }
   }
 

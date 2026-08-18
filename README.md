@@ -102,7 +102,7 @@ danach das Kürzel der gewählten Blende und ist hell hinterlegt.
 | Blende | Wirkung |
 | --- | --- |
 | **SCHWARZBLENDE** | Video 1 blendet nach Schwarz, Video 2 aus Schwarz herein |
-| **LICHTLEAK** | vertikale Richtungsunschärfe mit hellem Streifen, der durchs Bild zieht – wie Licht durch eine Glasscheibe |
+| **LICHTLEAK** | breite, weiche Lichtblende: das Bild verzerrt diagonal (Richtungsunschärfe plus leichte Scherung), ein breiter Streifen zieht durch und eine helle Blende hüllt zum Schnitt hin die ganze Mitte ein; beim neuen Video läuft die Verzerrung in die andere Richtung zurück |
 | **SOFT PUSH** | weiches Heranfahren mit auslaufender Unschärfe und leichter Aufhellung, ohne Formen |
 
 Jede Blende dauert **0,6 s** und **verbraucht keine zusätzliche Zeit**: Sie liegt über den
@@ -113,6 +113,12 @@ steht im Layout-JSON als `blende_danach`. Werte und Kurven stehen in
 
 Wie bei den Text-Inserts gilt: Sobald eine Blende gesetzt ist, rendert die Anwendung im
 Browser – der ffmpeg-Weg mit statischem Overlay kann die Effekte nicht erzeugen.
+
+**Die beiden Knöpfe sind Schalter.** Ausgegraut heißt aus: Text-Inserts bzw. Blenden
+wirken dann weder in der Vorschau noch im Export. Die Eingaben bleiben gespeichert und
+sind nach dem nächsten Klick wieder da. Der Schaltzustand wird gemerkt und im
+Layout-JSON als `text_inserts_aktiv` und `blenden_aktiv` mitgeschrieben; beim ersten
+Aufruf sind sie eingeschaltet, wenn schon Inhalte hinterlegt sind.
 
 ## Layout speichern und laden
 

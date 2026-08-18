@@ -64,6 +64,17 @@
 
   const MAX_TEXT = IC.MAX_TEXT;
 
+  /* Die beiden Knöpfe sind echte Schalter: ausgegraut = Wirkung aus.
+     Die Eingaben bleiben dabei erhalten. */
+  const ON_KEY_TEXT  = 'peaq-inserts-aktiv';
+  const ON_KEY_TRANS = 'peaq-blenden-aktiv';
+
+  let insertsOn = false;
+  let transOn   = false;
+
+  const textOf  = mod => insertsOn ? (mod.text || '') : '';
+  const transOf = mod => transOn ? (mod.trans || 'none') : 'none';
+
   let state    = [];
   let current  = -1;               // aktuell geladenes Modul (Index in state)
   let fileTarget = -1;             // Modul, für das eine Datei gewählt wird
@@ -346,12 +357,9 @@
   }
 
   transTgl.addEventListener('click', () => {
-    const open = !strip.classList.contains('show-trans');
-    strip.classList.toggle('show-trans', open);
-    transTgl.classList.toggle('is-open', open);
-    transTgl.setAttribute('aria-expanded', String(open));
-    if (!open) closeTransMenu();
+    setTrans(!transOn);
     renderTransDots();
+    updateProgress();
   });
 
   /* Ein schwarzes Textkästchen je Modul – es sitzt im Modulkästchen selbst,
@@ -426,11 +434,26 @@
   }
 
   /* Auffächern ein-/ausklappen */
-  insertsTgl.addEventListener('click', () => {
-    const open = !strip.classList.contains('show-inserts');
+  function setInserts(open) {
+    insertsOn = open;
     strip.classList.toggle('show-inserts', open);
     insertsTgl.classList.toggle('is-open', open);
     insertsTgl.setAttribute('aria-expanded', String(open));
+    try { localStorage.setItem(ON_KEY_TEXT, open ? '1' : '0'); } catch (e) { /* egal */ }
+  }
+
+  function setTrans(open) {
+    transOn = open;
+    strip.classList.toggle('show-trans', open);
+    transTgl.classList.toggle('is-open', open);
+    transTgl.setAttribute('aria-expanded', String(open));
+    if (!open) closeTransMenu();
+    try { localStorage.setItem(ON_KEY_TRANS, open ? '1' : '0'); } catch (e) { /* egal */ }
+  }
+
+  insertsTgl.addEventListener('click', () => {
+    const open = !insertsOn;
+    setInserts(open);
 
     if (open) {
       /* Animation neu starten, damit die Kästchen wieder auffächern */
@@ -948,8 +971,8 @@
 
     let tr = null;
     if (seg && pos >= 0 && window.PeaqRender) {
-      const transOut = pos < line.length - 1 ? state[seg.index].trans : 'none';
-      const transIn  = pos > 0 ? state[line[pos - 1].index].trans : 'none';
+      const transOut = pos < line.length - 1 ? transOf(state[seg.index]) : 'none';
+      const transIn  = pos > 0 ? transOf(state[line[pos - 1].index]) : 'none';
       tr = PeaqRender.transitionAt(player.currentTime || 0, seg.duration || 4, transOut, transIn);
     }
 
@@ -985,17 +1008,29 @@
       return;
     }
 
-    /* Lichtleak: vertikale Unschärfe plus heller Streifen quer durchs Bild */
-    player.style.filter = 'blur(' + (tr.s * w * 0.003).toFixed(2) + 'px)';
-    player.style.transform = 'scaleY(' + (1 + 0.02 * tr.s).toFixed(4) + ')';
-    const q = (tr.side === 'out' ? -25 + 150 * tr.s : 125 - 150 * tr.s);
+    /* Lichtleak: diagonale Verzerrung plus breite helle Blende über der Mitte */
+    const dir   = tr.side === 'out' ? 1 : -1;
+    const weich = Math.pow(tr.s, 1.4);
+    const q     = (tr.side === 'out' ? -35 + 170 * tr.s : 135 - 170 * tr.s);
+
+    player.style.filter = 'blur(' + (tr.s * w * 0.006).toFixed(2) + 'px)';
+    player.style.transform =
+      'skewX(' + (2.0 * tr.s * dir).toFixed(2) + 'deg) ' +
+      'translateY(' + (h * 0.012 * tr.s * dir).toFixed(1) + 'px) ' +
+      'scale(' + (1 + 0.03 * tr.s).toFixed(4) + ')';
+
     transLayer.style.mixBlendMode = 'screen';
     transLayer.style.background =
-      'linear-gradient(100deg, rgba(255,255,255,0) ' + (q - 42) + '%,' +
-      ' rgba(255,246,226,' + (0.42 * tr.s).toFixed(3) + ') ' + (q - 8) + '%,' +
-      ' rgba(255,255,255,' + (0.72 * tr.s).toFixed(3) + ') ' + q + '%,' +
-      ' rgba(226,240,255,' + (0.34 * tr.s).toFixed(3) + ') ' + (q + 10) + '%,' +
-      ' rgba(255,255,255,0) ' + (q + 42) + '%)';
+      'radial-gradient(circle at 50% 50%,' +
+        ' rgba(255,253,246,' + (0.96 * weich).toFixed(3) + ') 0%,' +
+        ' rgba(255,251,240,' + (0.80 * weich).toFixed(3) + ') 45%,' +
+        ' rgba(255,255,255,' + (0.45 * weich).toFixed(3) + ') 78%,' +
+        ' rgba(255,255,255,' + (0.18 * weich).toFixed(3) + ') 100%),' +
+      'linear-gradient(100deg, rgba(255,255,255,0) ' + (q - 90) + '%,' +
+        ' rgba(255,244,220,' + (0.45 * tr.s).toFixed(3) + ') ' + (q - 22) + '%,' +
+        ' rgba(255,255,255,' + (0.85 * tr.s).toFixed(3) + ') ' + q + '%,' +
+        ' rgba(224,238,255,' + (0.45 * tr.s).toFixed(3) + ') ' + (q + 22) + '%,' +
+        ' rgba(255,255,255,0) ' + (q + 90) + '%)';
   }
 
   /* Insert des laufenden Moduls auf die Canvas zeichnen – exakt dieselbe
@@ -1018,10 +1053,11 @@
     if (!seg || !window.PeaqRender) return;
 
     const mod = state[seg.index];
-    if (!mod.text) return;
+    const txt = textOf(mod);
+    if (!txt) return;
 
     PeaqRender.drawInsert(insertCtx, {
-      text: mod.text,
+      text: txt,
       align: mod.align || 'center',
       width: w,
       height: h,
@@ -1186,7 +1222,7 @@
 
     for (const seg of line) {
       const clip = getClip(state[seg.index].clip);
-      const txt  = state[seg.index].text || '';
+      const txt  = textOf(state[seg.index]);
       const png  = await insertPng(txt, state[seg.index].align || 'center');
 
       if (clip.custom) {
@@ -1238,11 +1274,11 @@
   async function exportViaBrowser(line, size) {
     const items = line.map((seg, k) => ({
       src: srcOf(state[seg.index]),
-      text: state[seg.index].text || '',
+      text: textOf(state[seg.index]),
       align: state[seg.index].align || 'center',
       duration: seg.duration,
-      transOut: k < line.length - 1 ? (state[seg.index].trans || 'none') : 'none',
-      transIn:  k > 0 ? (state[line[k - 1].index].trans || 'none') : 'none'
+      transOut: k < line.length - 1 ? transOf(state[seg.index]) : 'none',
+      transIn:  k > 0 ? transOf(state[line[k - 1].index]) : 'none'
     }));
 
     let hinweis = '';
@@ -1299,8 +1335,8 @@
        nacheinander ein. Ohne Inserts nimmt der lokale ffmpeg den kürzeren
        Weg und kopiert verlustfrei. */
     const hatInserts = line.some((seg, k) =>
-      (state[seg.index].text || '').length > 0 ||
-      (k < line.length - 1 && (state[seg.index].trans || 'none') !== 'none'));
+      textOf(state[seg.index]).length > 0 ||
+      (k < line.length - 1 && transOf(state[seg.index]) !== 'none'));
     const browserMoeglich = window.PeaqRender && PeaqRender.supported() || renderMode === 'wasm';
     const server = serverRender && !(hatInserts && browserMoeglich) || forcedEngine === 'server';
 
@@ -1404,6 +1440,8 @@
       app: 'PEAQ Modul-Konfigurator',
       gespeichert: new Date().toISOString(),
       fernseher: currentTv.name,
+      text_inserts_aktiv: insertsOn,
+      blenden_aktiv: transOn,
       gesamtlaenge: fmt(totalDuration()),
       module: state.map((m, i) => {
         const clip = getClip(m.clip);
@@ -1490,6 +1528,9 @@
     });
 
     if (!next.length) throw new Error('Kein Video der Datei gefunden');
+
+    if (typeof data.text_inserts_aktiv === 'boolean') setInserts(data.text_inserts_aktiv);
+    if (typeof data.blenden_aktiv === 'boolean') setTrans(data.blenden_aktiv);
 
     /* Fernseher übernehmen, wenn er bekannt ist */
     const tv = tvList.find(t => t.name === data.fernseher);
@@ -1603,6 +1644,15 @@
     state = loadState();
 
     buildStrip();
+
+    const textVorhanden  = state.some(m => (m.text || '').length > 0);
+    const blendeGesetzt  = state.some(m => (m.trans || 'none') !== 'none');
+    const gemerktText    = localStorage.getItem(ON_KEY_TEXT);
+    const gemerktBlende  = localStorage.getItem(ON_KEY_TRANS);
+
+    setInserts(gemerktText === null ? textVorhanden : gemerktText === '1');
+    setTrans(gemerktBlende === null ? blendeGesetzt : gemerktBlende === '1');
+
     renderMeta();
     renderScrub();
 
