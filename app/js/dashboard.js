@@ -31,8 +31,8 @@
   const stripThumb   = document.getElementById('stripThumb');
   const insertsWrap  = document.querySelector('.inserts-wrap');
   const insertsTgl   = document.getElementById('insertsToggle');
-  const insertText   = document.getElementById('insertText');
-  const overlayBox   = document.querySelector('.insert-overlay');
+  const insertCanvas = document.getElementById('insertCanvas');
+  const insertCtx    = insertCanvas.getContext('2d');
   const layoutBtn    = document.getElementById('layoutBtn');
   const layoutLoad   = document.getElementById('layoutLoadBtn');
   const layoutInput  = document.getElementById('layoutInput');
@@ -61,18 +61,7 @@
     IN: 1.20, FADE: 0.45, OUT: 0.35, MOVE: 0.030, DRIFT: 0.006
   };
 
-  const MAX_TEXT        = IC.MAX_TEXT;
-  const INSERT_SIZE_DIV = IC.SIZE_DIV;
-  const INSERT_TRACK    = IC.TRACK;
-  const INSERT_BASE     = IC.BASE;
-  const TXT_IN    = IC.IN;
-  const TXT_FADE  = IC.FADE;
-  const TXT_OUT   = IC.OUT;
-  const TXT_MOVE  = IC.MOVE;
-  const TXT_DRIFT = IC.DRIFT;
-  const TEXT_IN    = 0.22;         // Einblendung in Sekunden
-  const TEXT_OUT   = 0.22;         // Ausblendung in Sekunden
-  const TEXT_LEAD  = 0.30;         // so früh vor Modulende beginnt das Ausblenden
+  const MAX_TEXT = IC.MAX_TEXT;
 
   let state    = [];
   let current  = -1;               // aktuell geladenes Modul (Index in state)
@@ -300,7 +289,7 @@
         state[i].align = cleanAlign(b.dataset.align);
         saveState();
         renderInserts();
-        renderOverlay(true);
+        renderOverlay();
       });
 
       input.addEventListener('input', () => {
@@ -310,7 +299,7 @@
         if (input.value !== state[i].text) input.value = state[i].text;
         box.querySelector('.insert-count').textContent = state[i].text.length + '/' + MAX_TEXT;
         saveState();
-        renderOverlay(true);
+        renderOverlay();
       });
 
       card.appendChild(box);
@@ -820,12 +809,12 @@
     return seg.start + Math.min(player.currentTime || 0, seg.duration || Infinity);
   }
 
-  /* Text-Insert des laufenden Moduls einblenden:
-     schnell herein (von unten), kurz vor dem Modulende wieder nach unten hinaus */
   /* Der Bildbereich kann schmaler sein als die schwarze Fläche –
-     Overlay und Schriftgröße richten sich nach dem echten Bild. */
-  let videoH = 0;                  // Höhe des sichtbaren Bildes in Pixeln
+     die Insert-Canvas richtet sich nach dem echten Bild. */
+  let videoBox = { w: 0, h: 0 };   // sichtbarer Bildbereich in Pixeln
 
+  /* Die Canvas liegt genau auf dem Videobild – auch wenn links und rechts
+     schwarze Flächen stehen. */
   function positionOverlay() {
     const vw = player.videoWidth  || 16;
     const vh = player.videoHeight || 9;
@@ -834,72 +823,51 @@
     if (!sw || !sh) return;
 
     const scale = Math.min(sw / vw, sh / vh);
-    const dw    = vw * scale;
-    const dh    = vh * scale;
-    videoH = dh;
+    const dw    = Math.round(vw * scale);
+    const dh    = Math.round(vh * scale);
+    const dpr   = Math.min(2, window.devicePixelRatio || 1);
 
-    overlayBox.style.left  = Math.round((sw - dw) / 2) + 'px';
-    overlayBox.style.width = Math.round(dw) + 'px';
-    overlayBox.style.top   = Math.round((sh - dh) / 2 + dh * INSERT_BASE) + 'px';
-    insertText.style.fontSize = Math.round(dw / INSERT_SIZE_DIV) + 'px';
+    if (videoBox.w !== dw || videoBox.h !== dh) {
+      videoBox = { w: dw, h: dh };
+      insertCanvas.style.left   = Math.round((sw - dw) / 2) + 'px';
+      insertCanvas.style.top    = Math.round((sh - dh) / 2) + 'px';
+      insertCanvas.style.width  = dw + 'px';
+      insertCanvas.style.height = dh + 'px';
+      insertCanvas.width  = Math.round(dw * dpr);
+      insertCanvas.height = Math.round(dh * dpr);
+    }
   }
 
   player.addEventListener('loadedmetadata', positionOverlay);
 
-  function renderOverlay(force) {
+  /* Insert des laufenden Moduls auf die Canvas zeichnen – exakt dieselbe
+     Routine wie im Export, damit Vorschau und Datei gleich aussehen. */
+  function renderOverlay() {
     const line = timeline();
     const seg  = line.find(s => s.index === current);
-    const txt  = seg ? (state[seg.index].text || '') : '';
-    const align = seg ? (state[seg.index].align || 'center') : 'center';
 
-    /* Ausrichtung und Größe passend zum Videobild (wie im Export) */
-    overlayBox.classList.toggle('align-left',   align === 'left');
-    overlayBox.classList.toggle('align-center', align === 'center');
-    overlayBox.classList.toggle('align-right',  align === 'right');
     positionOverlay();
 
-    if (insertText.dataset.text !== txt) {
-      insertText.dataset.text = txt;
-      insertText.textContent = '';
-      textLines(txt).forEach(line => {
-        const span = document.createElement('span');
-        span.className = 'insert-line';
-        span.textContent = line;
-        span.style.letterSpacing = INSERT_TRACK + 'em';
-        span.style.marginRight   = (-INSERT_TRACK) + 'em';   // Laufweite hinter dem letzten Zeichen ausgleichen
-        insertText.appendChild(span);
-      });
-    }
+    const w = insertCanvas.width;
+    const h = insertCanvas.height;
+    if (!w || !h) return;
 
-    if (!txt || !seg) {
-      insertText.style.opacity = '0';
-      return;
-    }
+    insertCtx.setTransform(1, 0, 0, 1, 0, 0);
+    insertCtx.clearRect(0, 0, w, h);
 
-    /* Ablauf: langsam von unten herein, im Stand leichtes Nachgleiten,
-       zum Schluss beschleunigt nach unten hinaus. */
-    const t     = player.currentTime || 0;
-    const dur   = seg.duration || 4;
-    const move  = (videoH || stage.clientHeight) * TXT_MOVE;
-    const drift = (videoH || stage.clientHeight) * TXT_DRIFT;
-    const outAt = Math.max(TXT_IN, dur - TXT_OUT);
+    if (!seg || !window.PeaqRender) return;
 
-    let y, alpha;
+    const mod = state[seg.index];
+    if (!mod.text) return;
 
-    if (t < outAt) {
-      /* schnell herein, weich auslaufend – und ohne Stillstand weiter gleitend */
-      const p = Math.min(1, Math.max(0, t / TXT_IN));
-      y     = move * Math.pow(1 - p, 3) - drift * Math.min(1, t / outAt);
-      alpha = Math.min(1, t / TXT_FADE);
-    } else {
-      /* nimmt wieder Fahrt auf und fliegt beschleunigt nach oben hinaus */
-      const r = Math.min(1, Math.max(0, (t - outAt) / TXT_OUT));
-      y     = -drift - move * Math.pow(r, 3);
-      alpha = 1 - r;
-    }
-
-    insertText.style.transform = 'translateY(' + y.toFixed(2) + 'px)';
-    insertText.style.opacity   = alpha.toFixed(3);
+    PeaqRender.drawInsert(insertCtx, {
+      text: mod.text,
+      align: mod.align || 'center',
+      width: w,
+      height: h,
+      time: player.currentTime || 0,
+      duration: seg.duration || 4
+    });
   }
 
   function updateProgress() {
@@ -1163,8 +1131,14 @@
     const line = timeline();
     if (!line.length) { note('KEIN AKTIVES MODUL', true); return; }
 
-    const size   = targetSize();
-    const server = serverRender;
+    const size = targetSize();
+
+    /* Mit Text-Inserts rendert der Browser: nur dort blenden die Buchstaben
+       nacheinander ein. Ohne Inserts nimmt der lokale ffmpeg den kürzeren
+       Weg und kopiert verlustfrei. */
+    const hatInserts = line.some(seg => (state[seg.index].text || '').length > 0);
+    const browserMoeglich = window.PeaqRender && PeaqRender.supported() || renderMode === 'wasm';
+    const server = serverRender && !(hatInserts && browserMoeglich) || forcedEngine === 'server';
 
     if (!server && !(window.PeaqRender && PeaqRender.supported())) {
       note('DIESER BROWSER KANN NICHT RENDERN – BITTE CHROME ODER EDGE', true);

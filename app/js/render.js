@@ -22,6 +22,12 @@ window.PeaqRender = (function () {
     OUT:        0.35,    // Hinausfliegen nach oben
     MOVE:       0.030,   // Weg beim Ein-/Ausfahren, Anteil der Bildhöhe
     DRIFT:      0.006,   // Nachgleiten im Stand
+    SHADOW:     0.40,    // Deckkraft des Schlagschattens
+    SHADOW_SOFT:0.55,    // Weichheit des Schattens, Anteil der Schriftgröße
+    CHAR_DUR:   0.40,    // Dauer der Einblendung je Buchstabe
+    CHAR_GAP:   0.05,    // Versatz zwischen den Buchstaben
+    CHAR_GAUSS: 0.10,    // Gauß-Unschärfe beim Einblenden, Anteil der Schriftgröße
+    CHAR_SMEAR: 0.20,    // Richtungsunschärfe vertikal, Anteil der Schriftgröße
     FPS:        25
   };
 
@@ -56,14 +62,53 @@ window.PeaqRender = (function () {
   }
 
   /* Eine Zeile mit fester Laufweite setzen (Canvas ignoriert letterSpacing teils) */
-  function drawTrackedLine(ctx, line, anchorX, y, size, align) {
+  function drawTrackedLine(ctx, line, anchorX, y, size, align, charState, baseAlpha) {
     const track  = size * CONST.TRACK;
     const chars  = Array.from(line);
     const widths = chars.map(ch => ctx.measureText(ch).width);
     const total  = widths.reduce((a, b) => a + b, 0) + track * Math.max(0, chars.length - 1);
 
     let x = align === 'left' ? anchorX : align === 'right' ? anchorX - total : anchorX - total / 2;
-    chars.forEach((ch, i) => { ctx.fillText(ch, x, y); x += widths[i] + track; });
+
+    chars.forEach((ch, i) => {
+      const step = charState ? charState() : { done: true };
+
+      if (!step.done) {
+        drawSoftChar(ctx, ch, x, y, size, step.progress, baseAlpha);
+      } else if (step.progress !== 0) {
+        ctx.globalAlpha = baseAlpha;
+        ctx.filter = 'none';
+        ctx.fillText(ch, x, y);
+      }
+
+      x += widths[i] + track;
+    });
+  }
+
+  /* Buchstabe während der Einblendung: Gauß-Unschärfe plus vertikale
+     Richtungsunschärfe, beides läuft mit dem Fortschritt aus. */
+  function drawSoftChar(ctx, ch, x, y, size, progress, baseAlpha) {
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const gauss = (1 - eased) * size * CONST.CHAR_GAUSS;
+    const smear = (1 - eased) * size * CONST.CHAR_SMEAR;
+    const alpha = baseAlpha * eased;
+
+    if (alpha <= 0.002) return;
+
+    ctx.filter = gauss > 0.3 ? 'blur(' + gauss.toFixed(2) + 'px)' : 'none';
+
+    if (smear > 0.6) {
+      const steps = 7;
+      ctx.globalAlpha = Math.min(1, alpha / steps * 2.2);
+      for (let s = 0; s < steps; s++) {
+        ctx.fillText(ch, x, y + (s / (steps - 1) - 0.5) * smear);
+      }
+    } else {
+      ctx.globalAlpha = alpha;
+      ctx.fillText(ch, x, y);
+    }
+
+    ctx.filter = 'none';
   }
 
   /* Text-Insert in einen Canvas zeichnen (statisch oder animiert) */
@@ -91,12 +136,32 @@ window.PeaqRender = (function () {
     ctx.textAlign     = 'left';
     ctx.textBaseline  = 'middle';
     if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
-    ctx.shadowColor   = 'rgba(0,0,0,.55)';
-    ctx.shadowBlur    = Math.round(size * 0.35);
-    ctx.shadowOffsetY = Math.round(size * 0.06);
+    ctx.shadowColor   = 'rgba(0,0,0,' + CONST.SHADOW + ')';
+    ctx.shadowBlur    = Math.round(size * CONST.SHADOW_SOFT);
+    ctx.shadowOffsetY = Math.round(size * 0.04);
     ctx.fillStyle     = '#ffffff';
 
-    lines.forEach((line, i) => drawTrackedLine(ctx, line, anchorX, startY + i * step, size, align));
+    /* Die Buchstaben blenden nacheinander ein; der Versatz wird so gewählt,
+       dass alle innerhalb der Einfahrzeit fertig sind. */
+    const count = lines.reduce((n, l) => n + Array.from(l).length, 0);
+    const gap   = count > 1
+      ? Math.min(CONST.CHAR_GAP, Math.max(0.012, (CONST.IN - CONST.CHAR_DUR) / (count - 1)))
+      : 0;
+
+    let index = 0;
+    const nextChar = () => {
+      const i = index++;
+      if (opts.time == null) return { done: true, progress: 1 };          // statisch (PNG)
+      const p = (opts.time - i * gap) / CONST.CHAR_DUR;
+      if (p <= 0) return { done: false, progress: 0 };
+      if (p >= 1) return { done: true, progress: 1 };
+      return { done: false, progress: p };
+    };
+
+    lines.forEach((line, i) =>
+      drawTrackedLine(ctx, line, anchorX, startY + i * step, size, align, nextChar, motion.alpha));
+
+    ctx.filter = 'none';
     ctx.restore();
   }
 

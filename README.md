@@ -71,18 +71,26 @@ Randabstand).
 * **Bis zu 30 Zeichen**, ab 15 Zeichen zweizeilig – umgebrochen wird am letzten Wortende davor, sonst hart.
 * Schriftgröße = Bildbreite ÷ 13, Laufweite −0,03 em, Textmitte auf 57 % der Bildhöhe (knapp unter der Bildmitte).
 * Bewegung: schnell von unten herein und weich auslaufend, danach ohne Stillstand langsam weiter nach oben gleitend, zum Schluss beschleunigt nach oben hinaus mit Ausblendung.
+* Die **Buchstaben blenden nacheinander ein**, jeder mit vertikaler Richtungsunschärfe (20 % der Schriftgröße) und Gauß-Unschärfe (10 %), die beim Erscheinen auslaufen. Der Versatz zwischen den Buchstaben passt sich der Textlänge an, damit alle innerhalb der Einfahrzeit stehen.
+* Schlagschatten: 40 % Deckkraft, weich (Radius 55 % der Schriftgröße).
 
 Die Eingaben werden gespeichert und beim Export eingebrannt.
 
-Die Vorschau ist maßstabsgetreu: Der Player nimmt die volle Breite ein und lässt links
-und rechts schwarze Flächen, wenn das Bild kleiner ist; die Inserts richten sich am
-tatsächlichen Bildbereich aus und skalieren mit ihm – was in der Vorschau steht, sitzt
-im Export an derselben Stelle.
+Die Vorschau zeichnet die Inserts über **dieselbe Routine wie der Export**
+(`PeaqRender.drawInsert` auf einer Canvas über dem Videobild). Der Player nimmt die
+volle Breite ein und lässt links und rechts schwarze Flächen, wenn das Bild kleiner ist;
+die Canvas liegt exakt auf dem Bild. Damit ist die Vorschau maßstabsgetreu, inklusive
+Buchstaben-Einblendung und Schatten.
 
-Technisch: Die Anwendung setzt den Text im Browser in OCR-A auf ein transparentes PNG
-(3840 px breit) und schickt es mit; ffmpeg legt es per `overlay` mit animierter Position
-und Alpha-Blende in das Video. So sieht der Export exakt aus wie die Vorschau, und es
-wird kein `drawtext`/freetype im ffmpeg-Build benötigt (der hier vorhandene hat es nicht).
+**Hinweis zum Export-Weg:** Sobald ein Text-Insert gesetzt ist, rendert die Anwendung im
+Browser – nur dort entsteht die Buchstaben-Einblendung. Ohne Inserts nimmt der lokale
+ffmpeg-Weg die Abkürzung und kopiert verlustfrei.
+
+Der ffmpeg-Weg kann Inserts ebenfalls einbrennen (`?render=server`): Die Anwendung setzt
+den Text dort in OCR-A auf ein transparentes PNG und ffmpeg legt es per `overlay` mit
+animierter Position und Alpha-Blende ins Bild – ohne `drawtext`/freetype, das der hier
+vorhandene ffmpeg-Build nicht mitbringt. Die Buchstaben-Einblendung entsteht auf diesem
+Weg allerdings nicht, deshalb rendert die Anwendung mit Inserts im Browser.
 
 ## Layout speichern und laden
 
