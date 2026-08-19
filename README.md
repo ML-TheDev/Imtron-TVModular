@@ -22,6 +22,7 @@ Passwort: **PEAQtv57** (in [app/js/config.js](app/js/config.js) änderbar).
 | --- | --- |
 | [app/index.html](app/index.html) | Zugangsseite: Logo links oben, schwarzer Button → Passwortfeld |
 | [app/dashboard.html](app/dashboard.html) | Dashboard: Modulleiste + Gesamtvideo, „MODULAUSWAHL" rechts oben |
+| [app/settings.html](app/settings.html) | Einstellungen: Modulvideos ersetzen, hinzufügen, archivieren |
 | [app/js/config.js](app/js/config.js) | Passwort, Clip-Bibliothek, Modul-Slots |
 | [app/js/dashboard.js](app/js/dashboard.js) | Modulleiste, Tausch-Logik, Playback über alle Module |
 | [app/js/render.js](app/js/render.js) | Insert-Darstellung und Rendern im Browser (WebCodecs) |
@@ -119,6 +120,28 @@ wirken dann weder in der Vorschau noch im Export. Die Eingaben bleiben gespeiche
 sind nach dem nächsten Klick wieder da. Der Schaltzustand wird gemerkt und im
 Layout-JSON als `text_inserts_aktiv` und `blenden_aktiv` mitgeschrieben; beim ersten
 Aufruf sind sie eingeschaltet, wenn schon Inhalte hinterlegt sind.
+
+## Videos verwalten (Einstellungen)
+
+Unten im Dashboard steht **EINSTELLUNGEN · VIDEOS VERWALTEN** – die Seite listet alle
+Clips mit Modulnummer, Bezeichnung, Dateiname, Auflösung, Länge und Größe. Clips unter
+3840 px werden mit **KEIN 4K** gekennzeichnet.
+
+* **ERSETZEN** – Datei wählen, sie überschreibt den Clip unter demselben Namen. Damit
+  behält das Modul seinen Platz, seine Blende und seinen Text-Insert. Die vorherige
+  Fassung wandert mit Zeitstempel nach `Footage/Archiv/` und ist nicht verloren.
+* **ARCHIVIEREN** – nimmt einen Clip aus der Auswahl; die Datei wird ebenfalls nach
+  `Footage/Archiv/` verschoben, nicht gelöscht.
+* **NEUES VIDEO HINZUFÜGEN** – Modulnummer, Bezeichnung und optional „als Variante"
+  angeben, dann Datei wählen. Die Anwendung legt sie als
+  `<Nummer> - Modul - <Bezeichnung>.mp4` ab; die Nummer bestimmt die Position in der
+  Reihenfolge, „als Variante" hängt „Variante" an den Namen und stellt den Clip damit in
+  die V1/V2-Leiste des Moduls.
+
+Neu hinzugekommene Videos erscheinen beim nächsten Aufruf des Dashboards automatisch am
+Ende der Modulleiste – ohne Zurücksetzen. Das Verwalten braucht den lokalen Server
+(**Start.cmd**); online zeigt die Seite die Liste, aber keine Schaltflächen, weil die
+Dateien dort Teil der Veröffentlichung sind.
 
 ## Layout speichern und laden
 

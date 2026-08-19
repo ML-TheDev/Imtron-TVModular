@@ -1022,3 +1022,196 @@ button.foot-item:hover .foot-key { text-decoration: underline; }
   .topbar-label { font-size: 22px; }
   .transport { flex-wrap: wrap; }
 }
+
+/* ---------------- Einstellungen: Videos verwalten ---------------- */
+
+.settings-note {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  font-family: var(--ui-font);
+  font-size: 12px;
+  line-height: 1.5;
+  color: #7a1414;
+  background: rgba(122, 20, 20, .08);
+  border-radius: 6px;
+}
+
+.settings-hint {
+  margin: 12px 0 0;
+  font-family: var(--ui-font);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+
+.settings-hint code {
+  font-family: 'OCRA', monospace;
+  font-size: 11px;
+}
+
+.clip-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.clip-row {
+  display: grid;
+  grid-template-columns: 34px minmax(120px, 1.4fr) minmax(150px, 1.6fr) 130px 66px 74px auto;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  background: var(--module);
+  border-radius: 6px;
+  font-family: var(--ui-font);
+  font-size: 12px;
+  letter-spacing: .01em;
+}
+
+.clip-empty { color: var(--ink-soft); }
+
+.clip-nr {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.clip-name { font-weight: 600; }
+
+.clip-file,
+.clip-meta {
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.clip-tag,
+.clip-warn {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 5px;
+  border-radius: 2px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  vertical-align: 1px;
+}
+
+.clip-tag  { background: rgba(17, 17, 17, .12); color: var(--ink); }
+.clip-warn { background: rgba(122, 20, 20, .14); color: #7a1414; }
+
+.clip-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.clip-btn {
+  font-family: var(--ui-font);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: .04em;
+  color: #f2f1ee;
+  background: #000;
+  border: none;
+  border-radius: 3px;
+  padding: 7px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .2s ease;
+}
+
+.clip-btn:hover { background: #1c1c1c; }
+
+.clip-btn-quiet {
+  color: var(--ink);
+  background: rgba(255, 255, 255, .5);
+  font-weight: 500;
+}
+
+.clip-btn-quiet:hover { background: rgba(255, 255, 255, .85); }
+
+/* Formular zum Hinzufügen */
+
+.add-box {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 16px;
+  background: var(--module);
+  border-radius: 8px;
+}
+
+.add-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: var(--ui-font);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: .08em;
+  color: var(--ink-soft);
+}
+
+.add-grow { flex: 1 1 220px; }
+
+.add-field input {
+  font-family: var(--ui-font);
+  font-size: 13px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, .55);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 10px 12px;
+  outline: none;
+}
+
+.add-field input:focus { border-color: #000; }
+
+.add-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 11px;
+  font-family: var(--ui-font);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .06em;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.add-check input { accent-color: #000; width: 15px; height: 15px; }
+
+.settings-status {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 20px;
+}
+
+.settings-bar {
+  height: 6px;
+  background: rgba(17, 17, 17, .07);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.settings-fill {
+  width: 0;
+  height: 100%;
+  background: #000;
+  border-radius: 3px;
+  transition: width .15s linear;
+}
+
+a.foot-item { text-decoration: none; }
+a.foot-item:hover .foot-key { text-decoration: underline; }
+
+@media (max-width: 1100px) {
+  .clip-row { grid-template-columns: 30px 1fr 1fr auto; }
+  .clip-row .clip-meta { display: none; }
+}

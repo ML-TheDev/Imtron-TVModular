@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PEAQ – Einstellungen</title>
+  <link rel="icon" type="image/png" sizes="256x256" href="assets/favicon.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <header class="topbar">
+    <img class="logo" src="assets/peaq-logo.png" alt="PEAQ">
+    <span class="topbar-label">EINSTELLUNGEN</span>
+  </header>
+
+  <main class="board">
+
+    <section>
+      <div class="section-head">
+        <span>MODULVIDEOS</span>
+        <span id="clipCount"></span>
+      </div>
+
+      <p id="serverNote" class="settings-note" hidden></p>
+
+      <div id="clipList" class="clip-list"></div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <span>NEUES VIDEO HINZUFÜGEN</span>
+        <span>DER NAME BESTIMMT DIE POSITION</span>
+      </div>
+
+      <div class="add-box">
+        <label class="add-field">
+          <span>MODULNUMMER</span>
+          <input id="addGroup" type="number" min="1" max="99" value="1">
+        </label>
+
+        <label class="add-field add-grow">
+          <span>BEZEICHNUNG</span>
+          <input id="addName" type="text" placeholder="z. B. Detailshot 3" maxlength="40">
+        </label>
+
+        <label class="add-check">
+          <input id="addVariant" type="checkbox">
+          <span>ALS VARIANTE DES MODULS</span>
+        </label>
+
+        <button id="addBtn" class="btn-export" type="button">VIDEO WÄHLEN UND HOCHLADEN</button>
+      </div>
+
+      <p class="settings-hint">
+        Die Datei wird als <code>&lt;Nummer&gt; - Modul - &lt;Bezeichnung&gt;.mp4</code> abgelegt.
+        Gleiche Modulnummer heißt: gleicher Platz in der Reihenfolge. Mit „als Variante"
+        landet das Video in der V1/V2-Leiste des Moduls, sonst wird es ein eigenes Modul.
+      </p>
+    </section>
+
+    <div class="settings-status">
+      <span id="status" class="export-note"></span>
+      <div class="settings-bar" id="statusBar" hidden><div id="statusFill" class="settings-fill"></div></div>
+    </div>
+
+    <div class="board-foot">
+      <a class="foot-item" href="dashboard.html">
+        <span class="foot-key">ZURÜCK</span>
+        <span class="foot-sub">ZUR MODULAUSWAHL</span>
+      </a>
+      <div class="foot-item">
+        <span class="foot-key">ERSETZEN</span>
+        <span class="foot-sub">ALTE FASSUNG WANDERT NACH FOOTAGE/ARCHIV</span>
+      </div>
+      <button id="reloadBtn" class="foot-item foot-spacer" type="button">
+        <span class="foot-key">NEU EINLESEN</span>
+        <span class="foot-sub">ORDNER ERNEUT PRÜFEN</span>
+      </button>
+    </div>
+
+  </main>
+
+  <input id="fileReplace" type="file" accept="video/mp4,video/quicktime,video/webm,video/*" hidden>
+  <input id="fileAdd" type="file" accept="video/mp4,video/quicktime,video/webm,video/*" hidden>
+
+  <script src="js/config.js"></script>
+  <script src="js/settings.js"></script>
+</body>
+</html>

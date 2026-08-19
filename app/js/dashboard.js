@@ -131,7 +131,16 @@
           trans: cleanTrans(s.trans)
         }));
 
-      return restored.length ? restored : fallback();
+      if (!restored.length) return fallback();
+
+      /* Neu hinzugekommene Videos anhängen, damit Uploads sofort auftauchen */
+      defaults.forEach(d => {
+        if (!restored.some(r => r.clip === d.clip)) {
+          restored.push({ clip: d.clip, enabled: true, text: '', align: 'center', trans: 'none' });
+        }
+      });
+
+      return restored;
     } catch (e) {
       return fallback();
     }

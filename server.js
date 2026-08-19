@@ -16,6 +16,7 @@ const PORT       = process.env.PORT || 8123;
 const EXPORT_DIR = path.join(ROOT, 'Export');
 const UPLOAD_DIR = path.join(EXPORT_DIR, '_upload');
 const CLIP_DIR   = path.join(ROOT, 'Footage', 'Modul Videos');
+const ARCHIV_DIR = path.join(ROOT, 'Footage', 'Archiv');
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -474,6 +475,116 @@ async function handleUpload(req, res, query) {
   json(res, 200, { path: 'Export/_upload/' + file });
 }
 
+/* ---------------- Videos verwalten (Einstellungsseite) ---------------- */
+
+const CLIP_EXT = /\.(mp4|mov|webm|m4v)$/i;
+
+/* Nur Dateien im Clip-Ordner, keine Pfadwechsel */
+function clipPath(name) {
+  const base = path.basename(String(name || ''));
+  if (!base || !CLIP_EXT.test(base)) return null;
+  const abs = path.join(CLIP_DIR, base);
+  return abs.startsWith(CLIP_DIR) ? abs : null;
+}
+
+/* Vorherige Fassung wegsichern, statt sie zu überschreiben */
+function archiviere(abs) {
+  if (!fs.existsSync(abs)) return null;
+  fs.mkdirSync(ARCHIV_DIR, { recursive: true });
+
+  const ext  = path.extname(abs);
+  const name = path.basename(abs, ext) + ' (' + stamp() + ')' + ext;
+  const ziel = path.join(ARCHIV_DIR, name);
+  fs.renameSync(abs, ziel);
+  return 'Footage/Archiv/' + name;
+}
+
+/* Vorhandenes Modulvideo austauschen */
+async function handleClipReplace(req, res, query) {
+  const abs = clipPath(query.get('file'));
+  if (!abs || !fs.existsSync(abs)) {
+    return json(res, 404, { error: 'Datei nicht gefunden' });
+  }
+
+  let daten;
+  try {
+    daten = await readBody(req, 2 * 1024 * 1024 * 1024);
+  } catch (e) {
+    return json(res, 413, { error: String(e.message || e) });
+  }
+  if (!daten.length) return json(res, 400, { error: 'Leere Datei' });
+
+  const gesichert = archiviere(abs);
+  fs.writeFileSync(abs, daten);
+
+  const info = inspect(abs) || {};
+  json(res, 200, {
+    datei: path.basename(abs),
+    gesichert,
+    breite: info.width, hoehe: info.height, laenge: info.duration,
+    groesse: fs.statSync(abs).size
+  });
+}
+
+/* Neues Modulvideo anlegen – der Name bestimmt die Position */
+async function handleClipAdd(req, res, query) {
+  const nummer = parseInt(query.get('group'), 10);
+  const rohName = String(query.get('name') || '').trim();
+  const endung = (String(query.get('ext') || 'mp4').match(/^[a-z0-9]{2,4}$/i) || ['mp4'])[0];
+
+  if (!(nummer >= 1 && nummer <= 99)) return json(res, 400, { error: 'Modulnummer 1 bis 99 erwartet' });
+
+  const name = rohName.replace(/[^\wÄÖÜäöüß .\-]+/g, '').replace(/\s+/g, ' ').trim().slice(0, 40);
+  if (!name) return json(res, 400, { error: 'Bitte eine Bezeichnung angeben' });
+  if (!CLIP_EXT.test('x.' + endung)) return json(res, 400, { error: 'Dateiformat nicht unterstützt' });
+
+  const datei = `${nummer} - Modul - ${name}.${endung.toLowerCase()}`;
+  const abs   = path.join(CLIP_DIR, datei);
+
+  let daten;
+  try {
+    daten = await readBody(req, 2 * 1024 * 1024 * 1024);
+  } catch (e) {
+    return json(res, 413, { error: String(e.message || e) });
+  }
+  if (!daten.length) return json(res, 400, { error: 'Leere Datei' });
+
+  const gesichert = fs.existsSync(abs) ? archiviere(abs) : null;
+  fs.writeFileSync(abs, daten);
+
+  const info = inspect(abs) || {};
+  json(res, 200, {
+    datei, gesichert,
+    breite: info.width, hoehe: info.height, laenge: info.duration,
+    groesse: fs.statSync(abs).size
+  });
+}
+
+/* Video aus der Auswahl nehmen – wird nach Footage/Archiv verschoben */
+function handleClipArchive(res, query) {
+  const abs = clipPath(query.get('file'));
+  if (!abs || !fs.existsSync(abs)) {
+    return json(res, 404, { error: 'Datei nicht gefunden' });
+  }
+  const ziel = archiviere(abs);
+  json(res, 200, { datei: path.basename(abs), gesichert: ziel });
+}
+
+/* Alle Clips samt technischer Daten für die Einstellungsseite */
+function handleClipList(res) {
+  const lib = scanLibrary();
+  const clips = lib.clips.map(c => {
+    const abs  = path.join(CLIP_DIR, path.basename(c.src));
+    const info = inspect(abs) || {};
+    return Object.assign({}, c, {
+      datei: path.basename(c.src),
+      breite: info.width, hoehe: info.height,
+      laenge: info.duration ? +info.duration.toFixed(2) : null
+    });
+  });
+  json(res, 200, { clips, modules: lib.modules });
+}
+
 /* ---------------- Server ---------------- */
 
 http.createServer(async (req, res) => {
@@ -488,6 +599,18 @@ http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && rel === '/api/upload') return handleUpload(req, res, url.searchParams);
+
+  /* Videos verwalten */
+  if (rel === '/api/clips') {
+    try {
+      return handleClipList(res);
+    } catch (e) {
+      return json(res, 500, { error: String(e.message || e) });
+    }
+  }
+  if (req.method === 'POST' && rel === '/api/clips/replace') return handleClipReplace(req, res, url.searchParams);
+  if (req.method === 'POST' && rel === '/api/clips/add')     return handleClipAdd(req, res, url.searchParams);
+  if (req.method === 'POST' && rel === '/api/clips/archive')  return handleClipArchive(res, url.searchParams);
 
   if (rel === '/api/library') {
     try {
