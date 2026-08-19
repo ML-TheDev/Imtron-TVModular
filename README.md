@@ -179,6 +179,10 @@ Qualitätsverlust, ein bis zwei Sekunden.
 Sonst wird auf die größte vorkommende Auflösung skaliert und neu codiert
 (libx264 CRF 18, sonst NVENC); für 24 Sekunden 4K sind das rund 20 Sekunden.
 
+**Auflösung:** Alle Clips liegen in 3840x2160 vor – bis auf
+`5 - Modul - Sound Feature 2.mp4` (1920x1080). Solange dieses Modul aktiv ist, kann der
+ffmpeg-Weg nicht verlustfrei kopieren, sondern skaliert und codiert neu.
+
 **Bildrate:** Das gesamte Material liegt in 25 fps vor, und beide Render-Wege geben
 25 fps aus – es wird also nichts umgerechnet. Der Wert steht in
 [app/js/render.js](app/js/render.js) unter `CONST.FPS` sowie in [server.js](server.js)

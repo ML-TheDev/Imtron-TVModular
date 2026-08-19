@@ -234,8 +234,7 @@ function scanLibrary() {
   if (!fs.existsSync(CLIP_DIR)) return { clips: [], modules: [] };
 
   const files = fs.readdirSync(CLIP_DIR)
-    .filter(f => /\.(mp4|mov|webm|m4v)$/i.test(f))
-    .sort((a, b) => a.localeCompare(b, 'de', { numeric: true }));
+    .filter(f => /\.(mp4|mov|webm|m4v)$/i.test(f));
 
   const clips = files.map(file => {
     const base  = file.replace(/\.[^.]+$/, '');
@@ -250,6 +249,15 @@ function scanLibrary() {
       src: '../Footage/Modul Videos/' + file,
       size: fs.statSync(path.join(CLIP_DIR, file)).size
     };
+  });
+
+  /* Nach Modulnummer und dann nach Bezeichnung sortieren – so steht
+     „SOUND FEATURE" vor „SOUND FEATURE 2". */
+  clips.sort((a, b) => {
+    const ga = a.group === null ? 9999 : a.group;
+    const gb = b.group === null ? 9999 : b.group;
+    if (ga !== gb) return ga - gb;
+    return a.label.localeCompare(b.label, 'de', { numeric: true });
   });
 
   /* Clips mit "Variante" im Namen sind Alternativen EINES Moduls –
