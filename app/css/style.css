@@ -356,12 +356,14 @@ body {
   opacity: .42;
 }
 
+/* Die Höhe setzt das Skript für alle Kacheln gleich – die Breite richtet sich
+   nach der Cliplänge, das Bild wird seitlich beschnitten. */
 .module-frame {
   position: relative;
   border-radius: 6px;
   overflow: hidden;
   background: #bfbdb9;
-  aspect-ratio: 16 / 9;
+  height: 62px;
   cursor: pointer;
 }
 

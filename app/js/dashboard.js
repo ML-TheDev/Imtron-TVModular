@@ -532,6 +532,14 @@
   function renderMeta() {
     const scale = stripScale();
 
+    /* Alle Vorschauen gleich hoch: 16:9 des kürzesten Moduls. Längere Clips
+       werden dadurch breiter, aber nicht höher. */
+    const kuerzeste = state.reduce((min, m) => {
+      const d = durOf(m) || 4;
+      return d < min ? d : min;
+    }, Infinity);
+    const frameHeight = Math.round((isFinite(kuerzeste) ? kuerzeste : 4) * scale * 9 / 16);
+
     state.forEach((mod, i) => {
       const { card } = cards[i];
       const clip = getClip(mod.clip);
@@ -546,6 +554,7 @@
       card.classList.toggle('is-off', !mod.enabled);
       card.classList.toggle('is-current', i === current && mod.enabled);
       card.style.width = Math.floor((dur > 0 ? dur : 4) * scale) + 'px';
+      cards[i].frame.style.height = frameHeight + 'px';
 
       renderVariants(i);
     });

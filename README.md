@@ -212,7 +212,7 @@ Dateien erscheinen ohne Codeänderung. Maßgeblich ist das Namensschema:
 * **„Variante" im Namen** = Alternative desselben Moduls. Alle Varianten einer Modulnummer teilen sich ein Kästchen und werden über die schwarze Leiste (V1 / V2 …) umgeschaltet; in der Timeline liegt immer nur die gewählte.
 * **Alle übrigen Clips** sind eigene Module und laufen nacheinander – auch mehrere mit derselben Modulnummer (z. B. Detailshot 1 und 2).
 * Das Schlüsselwort steht in `server.js` unter `VARIANT_RX`.
-* Die Breite der Kästchen richtet sich nach der Cliplänge, damit der Abspielstrich maßstabsgetreu läuft; bei vielen Modulen wird der Maßstab so weit verkleinert, dass alle nebeneinander passen.
+* Die Breite der Kästchen richtet sich nach der Cliplänge, damit der Abspielstrich maßstabsgetreu läuft; bei vielen Modulen wird der Maßstab so weit verkleinert, dass alle nebeneinander passen. Die Vorschaubilder sind dabei **alle gleich hoch** – längere Clips werden breiter und seitlich beschnitten, nicht höher.
 
 Die Listen in `app/js/config.js` sind nur die Rückfalllösung, wenn die Seite ohne den
 lokalen Server geöffnet wird.
